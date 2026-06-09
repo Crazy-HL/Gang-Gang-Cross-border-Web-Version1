@@ -1,21 +1,39 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
-from app import services
-from app.models import AuthRequest, MobileRequest
+from app.core.security import get_current_user
+from app.db.base import User
+from app.db.session import DbSession
+from app.models import AuthLoginResponse, AuthMeResponse, AuthRegisterResponse, AuthCodeResponse, CodeLoginRequest, LogoutResponse, MobileRequest, PasswordLoginRequest, RegisterRequest
+from app.services import auth_service
 
 router = APIRouter(prefix='/api/auth', tags=['auth'])
 
 
-@router.post('/code')
-def send_code(payload: MobileRequest):
-    return services.send_code(payload.mobile)
+@router.post('/code', response_model=AuthCodeResponse)
+def send_code(payload: MobileRequest, db: DbSession):
+    return auth_service.send_code(db, payload.mobile)
 
 
-@router.post('/login')
-def login(payload: AuthRequest):
-    return services.login_with_code(payload.mobile, payload.code)
+@router.post('/login', response_model=AuthLoginResponse)
+def login(payload: PasswordLoginRequest, db: DbSession):
+    return auth_service.login_with_password(db, payload.mobile, payload.password)
 
 
-@router.post('/register')
-def register(payload: AuthRequest):
-    return services.register_with_code(payload.mobile, payload.code)
+@router.post('/login/code', response_model=AuthLoginResponse)
+def login_code(payload: CodeLoginRequest, db: DbSession):
+    return auth_service.login_with_code(db, payload.mobile, payload.code)
+
+
+@router.post('/register', response_model=AuthRegisterResponse)
+def register(payload: RegisterRequest, db: DbSession):
+    return auth_service.register_with_code(db, payload.mobile, payload.code, payload.password)
+
+
+@router.get('/me', response_model=AuthMeResponse)
+def me(user: User = Depends(get_current_user)):
+    return auth_service.get_me(user)
+
+
+@router.post('/logout', response_model=LogoutResponse)
+def logout():
+    return auth_service.logout()

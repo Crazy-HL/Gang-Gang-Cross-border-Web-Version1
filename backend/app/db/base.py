@@ -40,10 +40,22 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     mobile: Mapped[str] = mapped_column(String(32), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(80))
+    password_hash: Mapped[str] = mapped_column(String(255), default='')
     role: Mapped[str] = mapped_column(String(20), default=UserRole.user.value)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     jobs: Mapped[list['Job']] = relationship(back_populates='owner')
+
+
+class VerificationCode(Base):
+    __tablename__ = 'verification_codes'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    mobile: Mapped[str] = mapped_column(String(32), index=True)
+    code: Mapped[str] = mapped_column(String(12))
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Job(Base):

@@ -1,9 +1,20 @@
-import type { AdminStats, DetectionFormInput, DetectionJob, DetectionReport, SelectOption } from '@/types/domain'
+import type { AdminStats, AuthUser, DetectionFormInput, DetectionJob, DetectionReport, SelectOption } from '@/types/domain'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
+let authToken = ''
+
+export function setAuthToken(token: string) {
+  authToken = token
+}
+
+function withAuthHeaders(options?: RequestInit): RequestInit {
+  const headers = new Headers(options?.headers)
+  if (authToken) headers.set('Authorization', `Bearer ${authToken}`)
+  return { ...options, headers }
+}
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, options)
+  const response = await fetch(`${API_BASE_URL}${path}`, withAuthHeaders(options))
   if (!response.ok) throw new Error(`API request failed: ${response.status}`)
   return response.json() as Promise<T>
 }
@@ -13,15 +24,27 @@ export function getOptions() {
 }
 
 export function sendCode(mobile: string) {
-  return request<{ ok: boolean }>('/api/auth/code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile }) })
+  return request<{ ok: boolean; debugCode?: string | null }>('/api/auth/code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile }) })
+}
+
+export function loginWithPassword(mobile: string, password: string) {
+  return request<{ ok: boolean; token: string; user: AuthUser | null }>('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, password }) })
 }
 
 export function loginWithCode(mobile: string, code: string) {
-  return request<{ ok: boolean; token: string; user: { id: number; name: string } }>('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, code }) })
+  return request<{ ok: boolean; token: string; user: AuthUser | null }>('/api/auth/login/code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, code }) })
 }
 
-export function registerWithCode(mobile: string, code: string) {
-  return request<{ ok: boolean }>('/api/auth/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, code }) })
+export function registerWithCode(mobile: string, code: string, password: string) {
+  return request<{ ok: boolean; userId: number | null; token: string; user: AuthUser | null }>('/api/auth/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, code, password }) })
+}
+
+export function getMe() {
+  return request<AuthUser>('/api/auth/me')
+}
+
+export function logout() {
+  return request<{ ok: boolean }>('/api/auth/logout', { method: 'POST' })
 }
 
 export function getJobs() {

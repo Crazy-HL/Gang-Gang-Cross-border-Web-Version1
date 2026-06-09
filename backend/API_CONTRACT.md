@@ -43,32 +43,35 @@ backend/
    ├─ mock_data.py                 # 当前 mock 数据，后续逐步替换
    ├─ routers/                     # 已接入 FastAPI 的接口路由
    │  ├─ __init__.py
-   │  ├─ auth.py                   # 认证接口：验证码、登录、注册
+   │  ├─ auth.py                   # 认证接口：短信验证码、密码登录、验证码登录、注册、当前用户
    │  ├─ jobs.py                   # 任务接口：创建、上传、运行、结果、PDF
    │  ├─ reports.py                # 报告接口：报告列表、报告详情
    │  ├─ admin.py                  # 管理后台接口
    │  └─ options.py                # 表单选项接口
-   ├─ services/                    # 已预留给合作者填写业务逻辑
-   │  ├─ __init__.py               # 当前保留 mock service，保证项目可运行
-   │  ├─ auth_service.py           # 预留：认证、验证码、登录注册逻辑
+   ├─ services/                    # 业务逻辑层
+   │  ├─ __init__.py
+   │  ├─ auth_service.py           # 认证、短信验证码、密码登录、注册逻辑
+   │  ├─ sms_service.py            # 阿里云短信发送逻辑
    │  ├─ job_service.py            # 预留：任务创建、任务列表、任务运行逻辑
    │  ├─ report_service.py         # 预留：报告查询、检测结果生成逻辑
    │  ├─ admin_service.py          # 预留：管理后台统计、管理员任务逻辑
    │  └─ file_service.py           # 预留：文件上传、文件存储逻辑
-   ├─ repositories/                # 已预留给合作者填写数据库访问逻辑
+   ├─ repositories/                # 数据库访问层
    │  ├─ __init__.py
-   │  ├─ user_repository.py        # 预留：用户表数据库操作
-   │  ├─ job_repository.py         # 预留：任务表数据库操作
-   │  ├─ report_repository.py      # 预留：报告表数据库操作
-   │  └─ admin_repository.py       # 预留：后台统计、管理员查询
-   ├─ db/                          # 已预留数据库相关文件
+   │  ├─ user_repository.py        # 用户表数据库操作
+   │  ├─ verification_code_repository.py # 验证码表数据库操作
+   │  ├─ job_repository.py         # 任务表数据库操作
+   │  ├─ report_repository.py      # 报告表数据库操作
+   │  └─ admin_repository.py       # 后台统计、管理员查询
+   ├─ db/                          # 数据库相关文件
    │  ├─ __init__.py
-   │  ├─ session.py                # 预留：数据库连接、Session
-   │  └─ base.py                   # 预留：ORM Base、模型注册
-   └─ core/                        # 已预留核心配置与安全能力
+   │  ├─ session.py                # SQLAlchemy 连接、Session、MySQL 连接池配置
+   │  ├─ init_db.py                # 建表和轻量字段补齐
+   │  └─ base.py                   # ORM Base、用户/验证码/任务/报告模型
+   └─ core/                        # 核心配置与安全能力
       ├─ __init__.py
-      ├─ config.py                 # 预留：环境变量、配置项
-      └─ security.py               # 预留：JWT、密码、权限校验
+      ├─ config.py                 # 环境变量、数据库、短信配置项
+      └─ security.py               # token、密码哈希、当前用户校验
 ```
 
 ---
@@ -95,7 +98,10 @@ frontend/
 GET  /api/options
 POST /api/auth/code
 POST /api/auth/login
+POST /api/auth/login/code
 POST /api/auth/register
+GET  /api/auth/me
+POST /api/auth/logout
 GET  /api/jobs
 POST /api/jobs
 POST /api/jobs/{job_id}/upload
@@ -159,15 +165,7 @@ GET  /api/admin/jobs
 
 ### 5. 当前 mock service 暂时不要直接删
 
-当前可运行逻辑在：
-
-```text
-backend/app/services/__init__.py
-```
-
-它保留了 mock 实现，确保前端和后端现在能正常跑起来。
-
-合作者可以逐步把逻辑迁移到：
+当前可运行逻辑已经拆分到：
 
 ```text
 backend/app/services/auth_service.py
@@ -177,7 +175,7 @@ backend/app/services/admin_service.py
 backend/app/services/file_service.py
 ```
 
-迁移完成后，再让 router 改为调用对应 service 文件。
+旧的 `backend/app/services.py` 已移除，后续合作者应继续在 `services/` 包目录内完善对应模块。
 
 ---
 
@@ -199,24 +197,20 @@ backend/app/core/security.py
 ```text
 POST /api/auth/code
 POST /api/auth/login
+POST /api/auth/login/code
 POST /api/auth/register
-```
-
-需要完善：
-
-- 短信验证码或本地验证码
-- 验证码存储和过期时间
-- 用户注册
-- 用户登录
-- JWT token
-- 当前用户权限校验
-
-建议后续新增接口：
-
-```text
 GET  /api/auth/me
 POST /api/auth/logout
 ```
+
+当前状态：已接入 MySQL、阿里云短信、验证码持久化、密码哈希、Bearer token。
+
+后续可继续完善：
+
+- 发送频率限制
+- token 黑名单或刷新 token
+- 找回密码/重置密码
+- 管理员权限策略
 
 ---
 
@@ -364,23 +358,34 @@ backend/app/db/base.py
 backend/app/repositories/*.py
 ```
 
-需要完善：
+当前数据库：MySQL。
 
-- 数据库连接
-- ORM Base
-- 用户表
-- 任务表
-- 报告表
-- 文件表
-- 管理员/权限表
-
-建议技术：
+配置位置：
 
 ```text
-SQLAlchemy
-Alembic
-SQLite 或 PostgreSQL
+backend/.env
+GANGGANG_DATABASE_URL=mysql+pymysql://用户名:密码@主机:3306/数据库名?charset=utf8mb4
 ```
+
+已实现：
+
+- SQLAlchemy 连接池
+- `users` 用户表
+- `verification_codes` 验证码表
+- `jobs` 任务表
+- `job_files` 文件表
+- `reports` 报告表
+- `category_scores` 分项评分表
+- `evidence` 证据表
+- `init_db.py` 自动建表和轻量字段补齐
+
+建议后续增加：
+
+```text
+Alembic
+```
+
+用于正式的数据库迁移版本管理。
 
 ---
 
@@ -636,7 +641,7 @@ backend/app/services/auth_service.py
 backend/app/repositories/user_repository.py
 ```
 
-当前状态：mock，不会真实发送短信。
+当前状态：已可用。验证码会保存到 MySQL 的 `verification_codes` 表；开启 `GANGGANG_SMS_ENABLED=true` 后会调用阿里云短信。
 
 请求：
 
@@ -654,13 +659,11 @@ backend/app/repositories/user_repository.py
 }
 ```
 
-需要完善：
+需要继续完善：
 
-- 生成验证码
-- 保存验证码到数据库或 Redis
-- 设置验证码有效期
-- 接入短信服务或本地开发验证码
-- 限制发送频率
+- 发送频率限制
+- 图形验证码或风控策略
+- 生产环境日志脱敏
 
 前端依赖字段：
 
@@ -683,14 +686,14 @@ backend/app/repositories/user_repository.py
 backend/app/core/security.py
 ```
 
-当前状态：mock，只判断验证码长度。
+当前状态：已可用。默认使用手机号 + 密码登录。
 
 请求：
 
 ```json
 {
   "mobile": "13800000000",
-  "code": "1234"
+  "password": "123456"
 }
 ```
 
@@ -699,21 +702,17 @@ backend/app/core/security.py
 ```json
 {
   "ok": true,
-  "token": "mock-token-13800000000",
+  "token": "access-token",
   "user": {
     "id": 1,
-    "name": "张三"
+    "mobile": "13800000000",
+    "name": "用户0000",
+    "role": "user"
   }
 }
 ```
 
-需要完善：
-
-- 校验验证码
-- 查询或创建用户
-- 生成 JWT token
-- 返回真实用户信息
-- token 过期时间
+密码存储：后端只保存 `password_hash`，不保存明文密码。
 
 前端依赖字段：
 
@@ -721,7 +720,9 @@ backend/app/core/security.py
 ok
 token
 user.id
+user.mobile
 user.name
+user.role
 ```
 
 可新增字段：
@@ -732,6 +733,47 @@ user.name
   "expiresIn": 86400,
   "user": {
     "mobile": "13800000000",
+    "role": "user"
+  }
+}
+```
+
+---
+
+## 4.1 验证码登录
+
+### `POST /api/auth/login/code`
+
+负责文件：
+
+```text
+backend/app/routers/auth.py
+backend/app/services/auth_service.py
+backend/app/repositories/verification_code_repository.py
+backend/app/core/security.py
+```
+
+当前状态：已可用，作为密码登录的备用方式。
+
+请求：
+
+```json
+{
+  "mobile": "13800000000",
+  "code": "123456"
+}
+```
+
+返回：
+
+```json
+{
+  "ok": true,
+  "token": "access-token",
+  "user": {
+    "id": 1,
+    "mobile": "13800000000",
+    "name": "用户0000",
     "role": "user"
   }
 }
@@ -751,14 +793,15 @@ backend/app/services/auth_service.py
 backend/app/repositories/user_repository.py
 ```
 
-当前状态：mock，不会真实创建用户。
+当前状态：已可用。注册使用手机号 + 短信验证码 + 密码，用户写入 MySQL `users` 表。
 
 请求：
 
 ```json
 {
   "mobile": "13800000000",
-  "code": "1234"
+  "code": "123456",
+  "password": "123456"
 }
 ```
 
@@ -766,16 +809,24 @@ backend/app/repositories/user_repository.py
 
 ```json
 {
-  "ok": true
+  "ok": true,
+  "userId": 1,
+  "token": "access-token",
+  "user": {
+    "id": 1,
+    "mobile": "13800000000",
+    "name": "用户0000",
+    "role": "user"
+  }
 }
 ```
 
-需要完善：
+需要继续完善：
 
-- 校验验证码
-- 判断手机号是否已注册
-- 创建用户
-- 初始化用户资料
+- 密码强度策略
+- 重复注册提示
+- 找回密码/重置密码
+- 用户资料初始化
 
 前端依赖字段：
 
@@ -1250,9 +1301,12 @@ jobs
 |---|---|---|---|---|
 | 健康检查 | `GET /health` | 可用 | 否 | `main.py` |
 | 选项 | `GET /api/options` | mock 可用 | 可选 | `options.py` |
-| 认证 | `POST /api/auth/code` | mock | 是 | `auth_service.py` |
-| 认证 | `POST /api/auth/login` | mock | 是 | `auth_service.py`, `security.py` |
-| 认证 | `POST /api/auth/register` | mock | 是 | `auth_service.py` |
+| 认证 | `POST /api/auth/code` | 已接入 MySQL + 阿里云短信 | 可选 | `auth_service.py`, `sms_service.py` |
+| 认证 | `POST /api/auth/login` | 密码登录可用 | 可选 | `auth_service.py`, `security.py` |
+| 认证 | `POST /api/auth/login/code` | 验证码登录可用 | 可选 | `auth_service.py`, `security.py` |
+| 认证 | `POST /api/auth/register` | 手机号 + 验证码 + 密码注册可用 | 可选 | `auth_service.py` |
+| 认证 | `GET /api/auth/me` | Bearer token 当前用户可用 | 可选 | `auth.py`, `security.py` |
+| 认证 | `POST /api/auth/logout` | 可用 | 可选 | `auth_service.py` |
 | 任务 | `GET /api/jobs` | mock | 是 | `job_service.py` |
 | 任务 | `POST /api/jobs` | mock | 是 | `job_service.py` |
 | 文件 | `POST /api/jobs/{job_id}/upload` | 占位 | 是 | `file_service.py` |
@@ -1269,22 +1323,23 @@ jobs
 
 ## 第一阶段：数据库基础
 
-当前状态：已完成基础骨架，可继续在此基础上接真实业务。
+当前状态：已完成 MySQL 基础表、用户表、验证码表、认证 token 和密码哈希；任务、报告等业务表已有 ORM 模型，后续继续补真实业务写入逻辑。
 
 已完成文件：
 
 ```text
-backend/app/core/config.py        # 数据库 URL 配置，默认 SQLite
-backend/app/db/session.py         # SQLAlchemy engine、Session、FastAPI 依赖
+backend/app/core/config.py        # 环境变量配置，默认 SQLite，可通过 .env 切换 MySQL
+backend/app/db/session.py         # SQLAlchemy engine、Session、MySQL 连接池
 backend/app/db/base.py            # ORM Base 和核心数据表模型
-backend/app/db/init_db.py         # 启动时创建数据库表
-backend/app/repositories/*.py     # 用户、任务、报告、后台基础查询方法
+backend/app/db/init_db.py         # 启动时创建数据库表并补齐必要字段
+backend/app/repositories/*.py     # 用户、验证码、任务、报告、后台基础查询方法
 ```
 
 已创建数据表模型：
 
 ```text
 users
+verification_codes
 jobs
 job_files
 reports
@@ -1296,10 +1351,9 @@ evidence
 
 ```text
 Alembic 数据库迁移
-真实业务写入逻辑
-登录用户上下文
+真实任务/报告业务写入逻辑
 更多索引和约束
-生产环境 PostgreSQL 配置
+生产环境密钥与数据库账号轮换
 ```
 
 ---
@@ -1314,14 +1368,26 @@ backend/app/repositories/user_repository.py
 backend/app/core/security.py
 ```
 
-需要完成：
+已完成：
 
 ```text
-验证码
-注册
-登录
-JWT
-用户权限
+短信验证码发送
+验证码 MySQL 持久化
+手机号 + 密码注册
+密码登录
+验证码备用登录
+Bearer token
+当前用户接口
+前端登录态恢复
+```
+
+后续可继续完善：
+
+```text
+发送频率限制
+找回密码/重置密码
+token 刷新或黑名单
+管理员权限策略
 ```
 
 ---
@@ -1435,11 +1501,11 @@ npm run dev
 
 # 十四、给合作者的结论
 
-1. 现在后端接口文件和协作文件已经预留好。
+1. 当前后端接口文件和协作文件已经预留好，认证模块已接入真实 MySQL、短信验证码、密码登录和 token。
 2. `routers/` 负责接口入口。
 3. `services/` 负责业务逻辑。
 4. `repositories/` 负责数据库访问。
 5. `db/` 负责数据库连接和 ORM 基础。
-6. `core/` 负责配置、安全、JWT、权限。
-7. 当前 mock 实现在 `backend/app/services/__init__.py`，保证项目还能跑。
+6. `core/` 负责配置、安全、token、密码哈希、权限。
+7. 任务、报告、管理后台接口仍以 mock/占位为主，是下一阶段重点。
 8. 后续只要接口路径和返回字段保持一致，前端不需要改。

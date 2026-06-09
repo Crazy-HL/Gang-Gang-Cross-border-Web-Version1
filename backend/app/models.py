@@ -5,6 +5,7 @@ from pydantic import BaseModel
 DetectionType = Literal['trademark', 'design', 'copyright']
 RiskLevel = Literal['high', 'medium', 'low', 'pending']
 JobStatus = Literal['queued', 'processing', 'done', 'failed']
+UserRole = Literal['user', 'admin']
 
 
 class SelectOption(BaseModel):
@@ -99,6 +100,53 @@ class MobileRequest(BaseModel):
     mobile: str
 
 
-class AuthRequest(BaseModel):
+class PasswordLoginRequest(BaseModel):
+    mobile: str
+    password: str
+
+
+class CodeLoginRequest(BaseModel):
     mobile: str
     code: str
+
+
+class RegisterRequest(BaseModel):
+    mobile: str
+    code: str
+    password: str
+
+
+class AuthCodeResponse(BaseModel):
+    ok: bool
+    debugCode: str | None = None
+
+
+class AuthUser(BaseModel):
+    id: int
+    mobile: str
+    name: str
+    role: UserRole
+
+
+class AuthLoginResponse(BaseModel):
+    ok: bool
+    token: str
+    user: AuthUser | None
+
+
+class AuthRegisterResponse(BaseModel):
+    ok: bool
+    userId: int | None = None
+    token: str = ''
+    user: AuthUser | None = None
+
+
+class AuthMeResponse(BaseModel):
+    id: int
+    mobile: str
+    name: str
+    role: UserRole
+
+
+class LogoutResponse(BaseModel):
+    ok: bool

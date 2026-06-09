@@ -9,7 +9,8 @@
         <RouterLink v-for="item in navItems" :key="item.href" :to="item.href" class="rounded-full px-4 py-2 text-sm text-slate-300 transition hover:bg-white/10 hover:text-white">{{ item.label }}</RouterLink>
       </nav>
       <div class="flex items-center gap-3">
-        <RouterLink to="/auth" class="hidden rounded-full border border-white/15 px-4 py-2 text-sm text-slate-200 transition hover:border-gold/60 hover:text-gold sm:inline-flex">登录</RouterLink>
+        <div v-if="user" class="hidden items-center gap-3 sm:flex"><span class="text-sm text-slate-300">{{ user.name }}</span><button type="button" class="rounded-full border border-white/15 px-4 py-2 text-sm text-slate-200 transition hover:border-gold/60 hover:text-gold" @click="handleLogout">退出</button></div>
+        <RouterLink v-else to="/auth" class="hidden rounded-full border border-white/15 px-4 py-2 text-sm text-slate-200 transition hover:border-gold/60 hover:text-gold sm:inline-flex">登录</RouterLink>
         <RouterLink to="/detect" class="rounded-full bg-gold px-5 py-2.5 text-sm font-bold text-ink shadow-glow transition hover:bg-amber-300">快速上传检测</RouterLink>
       </div>
     </div>
@@ -22,6 +23,10 @@
 </template>
 
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
+import { logout, user } from '@/stores/auth'
+
+const router = useRouter()
 const navItems = [
   { href: '/', label: '首页' },
   { href: '/detect', label: '检测上传' },
@@ -29,4 +34,9 @@ const navItems = [
   { href: '/reports/1001', label: '报告' },
   { href: '/admin', label: '后台' }
 ]
+
+async function handleLogout() {
+  await logout()
+  router.push('/auth')
+}
 </script>
