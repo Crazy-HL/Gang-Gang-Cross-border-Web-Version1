@@ -1,10 +1,16 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.db.init_db import init_database
 from app.routers import admin, auth, jobs, options, reports
 
 app = FastAPI(title='Gang Gang Cross-border IP API')
+uploads_dir = Path(__file__).resolve().parents[1] / 'uploads'
+uploads_dir.mkdir(parents=True, exist_ok=True)
+app.mount('/uploads', StaticFiles(directory=uploads_dir), name='uploads')
 
 app.add_middleware(
     CORSMiddleware,

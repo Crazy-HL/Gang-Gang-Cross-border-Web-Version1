@@ -65,6 +65,10 @@ export function runJob(jobId: string) {
   return request<{ jobId: string; status: 'queued' }>(`/api/jobs/${encodeURIComponent(jobId)}/run`, { method: 'POST' })
 }
 
+export function requestJobReview(jobId: string, note = '') {
+  return request<{ ok: boolean; jobId: string; reviewStatus: string }>(`/api/jobs/${encodeURIComponent(jobId)}/review`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ note }) })
+}
+
 export function getJobResults(id: string) {
   return request<DetectionReport>(`/api/jobs/${encodeURIComponent(id)}/results`)
 }

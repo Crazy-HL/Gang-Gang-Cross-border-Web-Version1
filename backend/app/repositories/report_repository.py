@@ -34,7 +34,7 @@ def list_reports(db: Session):
 
 
 def get_report(db: Session, report_id: str) -> Report | None:
-    query = select(Report).options(selectinload(Report.category_scores), selectinload(Report.evidence)).where(or_(Report.id == report_id, Report.job_id == report_id))
+    query = select(Report).options(selectinload(Report.category_scores), selectinload(Report.evidence), selectinload(Report.job)).where(or_(Report.id == report_id, Report.job_id == report_id))
     return db.scalar(query)
 
 

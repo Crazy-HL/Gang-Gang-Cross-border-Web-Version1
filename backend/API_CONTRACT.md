@@ -450,7 +450,10 @@ frontend/src/types/domain.ts
   "riskLevel": "high",
   "riskScore": 85,
   "createdAt": "2026-06-01 10:20",
-  "ownerName": "张三"
+  "ownerName": "张三",
+  "fileUrl": "/uploads/1001/product.png",
+  "reviewStatus": "none",
+  "reviewNote": ""
 }
 ```
 
@@ -469,6 +472,9 @@ frontend/src/types/domain.ts
 | riskScore | number/null | 风险分数 |
 | createdAt | string | 创建时间 |
 | ownerName | string | 用户名 |
+| fileUrl | string | 第一张上传文件 URL，没有则为空字符串 |
+| reviewStatus | string | `none`、`pending`、`approved`、`rejected` |
+| reviewNote | string | 人工复核备注 |
 
 ---
 
@@ -959,7 +965,7 @@ backend/app/services/file_service.py
 backend/app/repositories/job_repository.py
 ```
 
-当前状态：占位，只读取文件名。
+当前状态：已可用。文件保存到 `backend/uploads/{job_id}/`，数据库记录写入 `job_files`，返回可通过 `/uploads/...` 访问的文件 URL。
 
 请求类型：
 
@@ -977,17 +983,24 @@ file
 
 ```json
 {
-  "jobId": "mock-northbird",
-  "fileUrl": "/uploads/product.png"
+  "jobId": "job-20260610123000-northbird",
+  "fileUrl": "/uploads/job-20260610123000-northbird/20260610123000123456-product.png"
 }
 ```
 
-需要完善：
+文件限制：
 
-- 保存文件
-- 校验文件类型和大小
-- 生成真实访问地址
-- 将文件地址绑定任务
+```text
+允许 jpg/jpeg/png
+最大 8MB
+```
+
+后续可继续完善：
+
+- 接入对象存储 OSS/S3
+- 生成缩略图
+- 文件病毒扫描
+- 定期清理孤儿文件
 
 前端依赖字段：
 

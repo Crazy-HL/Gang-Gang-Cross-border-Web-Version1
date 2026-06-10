@@ -1,5 +1,5 @@
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.db.base import Job, JobFile
 from app.models import DetectionFormInput
@@ -19,18 +19,21 @@ def job_to_dict(job: Job):
         'riskScore': job.risk_score,
         'createdAt': format_datetime(job.created_at),
         'ownerName': job.owner.name if job.owner else '张三',
+        'reviewStatus': job.review_status,
+        'reviewNote': job.review_note,
+        'fileUrl': job.files[0].file_url if job.files else '',
     }
 
 
 def list_jobs(db: Session, owner_id: int | None = None):
-    query = select(Job).order_by(Job.created_at.desc())
+    query = select(Job).options(selectinload(Job.owner), selectinload(Job.files)).order_by(Job.created_at.desc())
     if owner_id is not None:
         query = query.where(Job.owner_id == owner_id)
     return [job_to_dict(job) for job in db.scalars(query).all()]
 
 
 def get_job(db: Session, job_id: str) -> Job | None:
-    return db.get(Job, job_id)
+    return db.scalar(select(Job).options(selectinload(Job.files)).where(Job.id == job_id))
 
 
 def create_job(db: Session, job_id: str, input_data: DetectionFormInput, owner_id: int | None = None) -> Job:
@@ -66,6 +69,17 @@ def update_job_status(db: Session, job_id: str, status: str) -> Job | None:
     if not job:
         return None
     job.status = status
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def update_job_review(db: Session, job_id: str, status: str, note: str = '') -> Job | None:
+    job = get_job(db, job_id)
+    if not job:
+        return None
+    job.review_status = status
+    job.review_note = note
     db.commit()
     db.refresh(job)
     return job

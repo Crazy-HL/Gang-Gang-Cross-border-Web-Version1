@@ -59,6 +59,8 @@ class DetectionJob(BaseModel):
     riskScore: int | None
     createdAt: str
     ownerName: str
+    reviewStatus: str = 'none'
+    reviewNote: str = ''
 
 
 class DetectionReport(BaseModel):
@@ -94,6 +96,16 @@ class UploadResponse(BaseModel):
 class RunJobResponse(BaseModel):
     jobId: str
     status: Literal['queued']
+
+
+class ReviewRequest(BaseModel):
+    note: str = ''
+
+
+class ReviewResponse(BaseModel):
+    ok: bool
+    jobId: str
+    reviewStatus: str
 
 
 class MobileRequest(BaseModel):

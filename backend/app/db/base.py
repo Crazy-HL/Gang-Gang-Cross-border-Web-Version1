@@ -72,6 +72,8 @@ class Job(Base):
     status: Mapped[str] = mapped_column(String(32), default=JobStatus.queued.value)
     risk_level: Mapped[str] = mapped_column(String(32), default=RiskLevel.pending.value)
     risk_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    review_status: Mapped[str] = mapped_column(String(32), default='none')
+    review_note: Mapped[str] = mapped_column(Text, default='')
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     owner: Mapped[User | None] = relationship(back_populates='jobs')

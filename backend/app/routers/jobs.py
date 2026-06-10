@@ -1,42 +1,65 @@
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 
-from app import services
-from app.models import DetectionFormInput
+from app.core.security import get_current_user
+from app.db.base import User
+from app.db.session import DbSession
+from app.models import DetectionFormInput, ReviewRequest
+from app.services import file_service, job_service, report_service
 
 router = APIRouter(prefix='/api/jobs', tags=['jobs'])
 
 
 @router.get('')
-def read_jobs():
-    return services.get_jobs()
+def read_jobs(db: DbSession, user: User = Depends(get_current_user)):
+    return job_service.list_user_jobs(db, user)
 
 
 @router.post('')
-def create_job(payload: DetectionFormInput):
-    return services.create_job(payload)
+def create_job(payload: DetectionFormInput, db: DbSession, user: User = Depends(get_current_user)):
+    return job_service.create_user_job(db, payload, user)
 
 
 @router.post('/{job_id}/upload')
-async def upload_job_file(job_id: str, file: UploadFile = File(...)):
-    return services.upload_job_file(job_id, file.filename or 'upload.bin')
+async def upload_job_file(job_id: str, db: DbSession, file: UploadFile = File(...), user: User = Depends(get_current_user)):
+    job = job_service.get_user_job(db, job_id, user)
+    if not job:
+        raise HTTPException(status_code=404, detail='Job not found')
+    return await file_service.attach_upload(db, job, file)
 
 
 @router.post('/{job_id}/run')
-def run_job(job_id: str):
-    return services.run_job(job_id)
+def run_job(job_id: str, db: DbSession, user: User = Depends(get_current_user)):
+    result = job_service.run_user_job(db, job_id, user)
+    if not result:
+        raise HTTPException(status_code=404, detail='Job not found')
+    return result
+
+
+@router.post('/{job_id}/review')
+def request_job_review(job_id: str, payload: ReviewRequest, db: DbSession, user: User = Depends(get_current_user)):
+    result = job_service.request_review(db, job_id, user, payload.note)
+    if not result:
+        raise HTTPException(status_code=404, detail='Job not found')
+    return result
 
 
 @router.get('/{job_id}/results')
-def read_job_results(job_id: str):
-    report = services.get_job_results(job_id)
+def read_job_results(job_id: str, db: DbSession, user: User = Depends(get_current_user)):
+    job = job_service.get_user_job(db, job_id, user)
+    if not job:
+        raise HTTPException(status_code=404, detail='Job not found')
+    report = report_service.get_user_job_results(db, job)
     if not report:
         raise HTTPException(status_code=404, detail='Report not found')
     return report
 
 
 @router.get('/{job_id}/report/pdf')
-def download_report_pdf(job_id: str):
+def download_report_pdf(job_id: str, db: DbSession, user: User = Depends(get_current_user)):
+    job = job_service.get_user_job(db, job_id, user)
+    if not job:
+        raise HTTPException(status_code=404, detail='Job not found')
     body = f"""%PDF-1.4
 1 0 obj
 << /Type /Catalog /Pages 2 0 R >>
