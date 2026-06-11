@@ -107,10 +107,16 @@ POST /api/jobs
 POST /api/jobs/{job_id}/upload
 POST /api/jobs/{job_id}/run
 GET  /api/jobs/{job_id}/results
+GET  /api/jobs/{job_id}/status
 GET  /api/reports
 GET  /api/reports/{report_id}
 GET  /api/jobs/{job_id}/report/pdf
+GET  /api/notifications
+GET  /api/notifications/unread-count
+POST /api/notifications/{notification_id}/read
 GET  /api/admin/jobs
+GET  /api/admin/model-config
+PUT  /api/admin/model-config
 ```
 
 可以新增接口，但不要删除或改名已有接口。
@@ -1246,7 +1252,7 @@ backend/app/services/admin_service.py
 backend/app/repositories/admin_repository.py
 ```
 
-当前状态：mock。
+当前状态：已可用。需要管理员角色，返回真实统计数据和真实任务列表。
 
 返回：
 
@@ -1270,24 +1276,65 @@ backend/app/repositories/admin_repository.py
       "riskLevel": "high",
       "riskScore": 85,
       "createdAt": "2026-06-01 10:20",
-      "ownerName": "张三"
+      "ownerName": "张三",
+      "reviewStatus": "pending",
+      "reviewNote": "请人工复核该任务风险"
     }
   ]
 }
 ```
 
-需要完善：
+后续可继续完善：
 
-- 管理员权限校验
-- 真实统计数据
-- 真实任务列表
 - 搜索、筛选、分页
+- 管理员用户列表
+- 复核处理历史
 
 前端依赖字段：
 
 ```text
 stats
 jobs
+```
+
+## 14.1 管理员处理人工复核
+
+### `PATCH /api/admin/jobs/{job_id}/review`
+
+负责文件：
+
+```text
+backend/app/routers/admin.py
+backend/app/services/admin_service.py
+backend/app/repositories/admin_repository.py
+```
+
+当前状态：已可用。只有管理员角色可以调用。
+
+请求：
+
+```json
+{
+  "reviewStatus": "approved",
+  "reviewNote": "管理员已确认风险可控"
+}
+```
+
+`reviewStatus` 允许：
+
+```text
+approved
+rejected
+```
+
+返回：更新后的 `DetectionJob`。
+
+```json
+{
+  "id": "job-xxx",
+  "reviewStatus": "approved",
+  "reviewNote": "管理员已确认风险可控"
+}
 ```
 
 ---
@@ -1303,8 +1350,13 @@ jobs
 | `GET /api/jobs/{job_id}/status` | 获取检测进度 | `jobs.py`, `job_service.py` |
 | `DELETE /api/jobs/{job_id}` | 删除任务 | `jobs.py`, `job_service.py` |
 | `POST /api/jobs/{job_id}/review` | 申请人工复核 | `jobs.py`, `job_service.py` |
+| `GET /api/notifications` | 获取用户通知列表 | `notifications.py`, `notification_service.py` |
+| `GET /api/notifications/unread-count` | 获取未读通知数量 | `notifications.py`, `notification_service.py` |
+| `POST /api/notifications/{notification_id}/read` | 标记通知已读 | `notifications.py`, `notification_service.py` |
 | `GET /api/admin/users` | 管理员用户列表 | `admin.py`, `admin_service.py` |
-| `PATCH /api/admin/jobs/{job_id}` | 管理员更新任务 | `admin.py`, `admin_service.py` |
+| `GET /api/admin/model-config` | 获取大模型报告配置 | `admin.py`, `admin_service.py` |
+| `PUT /api/admin/model-config` | 保存大模型报告配置 | `admin.py`, `admin_service.py` |
+| `PATCH /api/admin/jobs/{job_id}/review` | 管理员处理人工复核 | `admin.py`, `admin_service.py` |
 
 ---
 
@@ -1324,11 +1376,17 @@ jobs
 | 任务 | `POST /api/jobs` | mock | 是 | `job_service.py` |
 | 文件 | `POST /api/jobs/{job_id}/upload` | 占位 | 是 | `file_service.py` |
 | 任务 | `POST /api/jobs/{job_id}/run` | 占位 | 是 | `job_service.py` |
-| 结果 | `GET /api/jobs/{job_id}/results` | mock | 是 | `report_service.py` |
-| 报告 | `GET /api/reports` | mock | 是 | `report_service.py` |
-| 报告 | `GET /api/reports/{report_id}` | mock | 是 | `report_service.py` |
+| 结果 | `GET /api/jobs/{job_id}/results` | 已接入 MySQL 报告和复核状态 | 可选 | `report_service.py` |
+| 报告 | `GET /api/reports` | 已接入 MySQL 报告列表 | 可选 | `report_service.py` |
+| 报告 | `GET /api/reports/{report_id}` | 已接入 MySQL 报告详情 | 可选 | `report_service.py` |
 | PDF | `GET /api/jobs/{job_id}/report/pdf` | 占位 | 是 | `report_service.py` |
-| 管理后台 | `GET /api/admin/jobs` | mock | 是 | `admin_service.py` |
+| 通知 | `GET /api/notifications` | 可用 | 可选 | `notifications.py`, `notification_service.py` |
+| 通知 | `GET /api/notifications/unread-count` | 可用 | 可选 | `notifications.py`, `notification_service.py` |
+| 通知 | `POST /api/notifications/{notification_id}/read` | 可用 | 可选 | `notifications.py`, `notification_service.py` |
+| 管理后台 | `GET /api/admin/jobs` | 已接入 MySQL + 管理员权限 | 可选 | `admin_service.py` |
+| 大模型配置 | `GET /api/admin/model-config` | 可用 | 可选 | `admin_service.py`, `model_config_repository.py` |
+| 大模型配置 | `PUT /api/admin/model-config` | 可用 | 可选 | `admin_service.py`, `model_config_repository.py` |
+| 报告生成 | `provider=openai/anthropic` | 已支持 OpenAI 兼容与 Anthropic Messages 协议 | 可选 | `report_service.py` |
 
 ---
 
@@ -1353,6 +1411,8 @@ backend/app/repositories/*.py     # 用户、验证码、任务、报告、后�
 ```text
 users
 verification_codes
+notifications
+model_configs
 jobs
 job_files
 reports

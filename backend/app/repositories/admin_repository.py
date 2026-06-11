@@ -2,7 +2,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.base import Job, User
-from app.repositories.job_repository import list_jobs
+from app.repositories.job_repository import get_job, job_to_dict, list_jobs, update_job_review
 
 
 def get_admin_stats(db: Session):
@@ -20,3 +20,12 @@ def get_admin_stats(db: Session):
 
 def get_admin_jobs(db: Session):
     return {'stats': get_admin_stats(db), 'jobs': list_jobs(db)}
+
+
+def update_admin_job_review(db: Session, job_id: str, status: str, note: str):
+    job = update_job_review(db, job_id, status, note)
+    return job_to_dict(job) if job else None
+
+
+def get_admin_job(db: Session, job_id: str):
+    return get_job(db, job_id)

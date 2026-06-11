@@ -25,11 +25,13 @@ def report_to_dict(report: Report):
             for item in report.evidence
         ],
         'suggestions': json.loads(report.suggestions_json or '[]'),
+        'reviewStatus': report.job.review_status if report.job else 'none',
+        'reviewNote': report.job.review_note if report.job else '',
     }
 
 
 def list_reports(db: Session):
-    query = select(Report).options(selectinload(Report.category_scores), selectinload(Report.evidence)).order_by(Report.generated_at.desc())
+    query = select(Report).options(selectinload(Report.category_scores), selectinload(Report.evidence), selectinload(Report.job)).order_by(Report.generated_at.desc())
     return [report_to_dict(report) for report in db.scalars(query).all()]
 
 
@@ -48,11 +50,15 @@ def create_report(db: Session, report_data: dict) -> Report:
         summary=report_data['summary'],
         suggestions_json=json.dumps(report_data.get('suggestions', []), ensure_ascii=False),
     )
-    db.add(report)
-    for item in report_data.get('categoryScores', []):
-        db.add(CategoryScore(report_id=report.id, type=item['type'], label=item['label'], score=item['score'], hits=item['hits']))
-    for item in report_data.get('evidence', []):
-        db.add(Evidence(report_id=report.id, id=item['id'], category=item['category'], matched=item['matched'], source=item['source'], similarity=item['similarity'], description=item['description'], image_url=item['imageUrl']))
-    db.commit()
-    db.refresh(report)
-    return report
+    try:
+        db.add(report)
+        for item in report_data.get('categoryScores', []):
+            db.add(CategoryScore(report_id=report.id, type=item['type'], label=item['label'], score=item['score'], hits=item['hits']))
+        for item in report_data.get('evidence', []):
+            db.add(Evidence(report_id=report.id, id=item['id'], category=item['category'], matched=item['matched'], source=item['source'], similarity=item['similarity'], description=item['description'], image_url=item['imageUrl']))
+        db.commit()
+        db.refresh(report)
+        return report
+    except Exception:
+        db.rollback()
+        raise

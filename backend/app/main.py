@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from app.db.init_db import init_database
-from app.routers import admin, auth, jobs, options, reports
+from app.routers import admin, auth, jobs, notifications, options, reports
 
 app = FastAPI(title='Gang Gang Cross-border IP API')
 uploads_dir = Path(__file__).resolve().parents[1] / 'uploads'
@@ -24,6 +24,7 @@ app.include_router(options.router)
 app.include_router(auth.router)
 app.include_router(jobs.router)
 app.include_router(reports.router)
+app.include_router(notifications.router)
 app.include_router(admin.router)
 
 

@@ -1,4 +1,4 @@
-import type { AdminStats, AuthUser, DetectionFormInput, DetectionJob, DetectionReport, SelectOption } from '@/types/domain'
+import type { AdminStats, AuthUser, DetectionFormInput, DetectionJob, DetectionReport, ModelConfigResponse, NotificationListResponse, SelectOption } from '@/types/domain'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 let authToken = ''
@@ -69,6 +69,10 @@ export function requestJobReview(jobId: string, note = '') {
   return request<{ ok: boolean; jobId: string; reviewStatus: string }>(`/api/jobs/${encodeURIComponent(jobId)}/review`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ note }) })
 }
 
+export function getJobStatus(jobId: string) {
+  return request<DetectionJob>(`/api/jobs/${encodeURIComponent(jobId)}/status`)
+}
+
 export function getJobResults(id: string) {
   return request<DetectionReport>(`/api/jobs/${encodeURIComponent(id)}/results`)
 }
@@ -83,6 +87,30 @@ export function getReport(id: string) {
 
 export function getAdminJobs() {
   return request<{ stats: AdminStats; jobs: DetectionJob[] }>('/api/admin/jobs')
+}
+
+export function updateAdminJobReview(jobId: string, reviewStatus: 'approved' | 'rejected', reviewNote = '') {
+  return request<DetectionJob>(`/api/admin/jobs/${encodeURIComponent(jobId)}/review`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ reviewStatus, reviewNote }) })
+}
+
+export function getModelConfig() {
+  return request<ModelConfigResponse>('/api/admin/model-config')
+}
+
+export function updateModelConfig(input: { provider: string; modelName: string; apiKey: string; baseUrl: string; temperature: number; maxTokens: number; enabled: boolean }) {
+  return request<ModelConfigResponse>('/api/admin/model-config', { method: 'PUT', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
+}
+
+export function getNotifications() {
+  return request<NotificationListResponse>('/api/notifications')
+}
+
+export function getUnreadNotificationCount() {
+  return request<{ unreadCount: number }>('/api/notifications/unread-count')
+}
+
+export function markNotificationRead(notificationId: number) {
+  return request<{ ok: boolean }>(`/api/notifications/${notificationId}/read`, { method: 'POST' })
 }
 
 export function downloadReportUrl(jobId: string) {

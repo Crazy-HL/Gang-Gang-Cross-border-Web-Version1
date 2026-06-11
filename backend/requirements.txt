@@ -8,3 +8,4 @@ alibabacloud-credentials>=1.0.2,<2.0.0
 alibabacloud-dysmsapi20170525==3.1.2
 alibabacloud-tea-openapi==0.3.16
 alibabacloud-tea-util==0.3.13
+httpx==0.28.1

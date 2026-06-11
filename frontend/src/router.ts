@@ -6,6 +6,7 @@ import ResultsView from '@/views/ResultsView.vue'
 import ReportsView from '@/views/ReportsView.vue'
 import AuthView from '@/views/AuthView.vue'
 import AdminView from '@/views/AdminView.vue'
+import NotificationsView from '@/views/NotificationsView.vue'
 import { isAuthenticated, loadCurrentUser } from '@/stores/auth'
 
 export const router = createRouter({
@@ -17,6 +18,7 @@ export const router = createRouter({
     { path: '/results/:id', component: ResultsView },
     { path: '/reports/:id', component: ReportsView },
     { path: '/auth', component: AuthView },
+    { path: '/notifications', component: NotificationsView, meta: { requiresAuth: true } },
     { path: '/admin', component: AdminView, meta: { requiresAuth: true } }
   ]
 })

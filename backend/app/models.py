@@ -63,6 +63,40 @@ class DetectionJob(BaseModel):
     reviewNote: str = ''
 
 
+class JobStatusResponse(BaseModel):
+    id: str
+    status: JobStatus
+    riskLevel: RiskLevel
+    riskScore: int | None
+    reviewStatus: str = 'none'
+    reviewNote: str = ''
+    createdAt: str
+
+
+class ModelConfigItem(BaseModel):
+    id: int
+    provider: str
+    modelName: str
+    baseUrl: str
+    temperature: float
+    maxTokens: int
+    enabled: bool
+
+
+class ModelConfigUpdateRequest(BaseModel):
+    provider: str
+    modelName: str
+    apiKey: str = ''
+    baseUrl: str = ''
+    temperature: float = 0.2
+    maxTokens: int = 2048
+    enabled: bool = True
+
+
+class ModelConfigResponse(BaseModel):
+    config: ModelConfigItem | None
+
+
 class DetectionReport(BaseModel):
     id: str
     jobId: str
@@ -74,6 +108,30 @@ class DetectionReport(BaseModel):
     categoryScores: list[CategoryScore]
     evidence: list[EvidenceItem]
     suggestions: list[str]
+    reviewStatus: str = 'none'
+    reviewNote: str = ''
+
+
+class NotificationItem(BaseModel):
+    id: int
+    title: str
+    content: str
+    type: str
+    isRead: bool
+    createdAt: str
+
+
+class NotificationListResponse(BaseModel):
+    unreadCount: int
+    notifications: list[NotificationItem]
+
+
+class UnreadCountResponse(BaseModel):
+    unreadCount: int
+
+
+class MarkNotificationReadResponse(BaseModel):
+    ok: bool
 
 
 class AdminStats(BaseModel):
@@ -106,6 +164,11 @@ class ReviewResponse(BaseModel):
     ok: bool
     jobId: str
     reviewStatus: str
+
+
+class AdminReviewRequest(BaseModel):
+    reviewStatus: Literal['approved', 'rejected']
+    reviewNote: str = ''
 
 
 class MobileRequest(BaseModel):

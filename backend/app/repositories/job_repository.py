@@ -33,7 +33,7 @@ def list_jobs(db: Session, owner_id: int | None = None):
 
 
 def get_job(db: Session, job_id: str) -> Job | None:
-    return db.scalar(select(Job).options(selectinload(Job.files)).where(Job.id == job_id))
+    return db.scalar(select(Job).options(selectinload(Job.owner), selectinload(Job.files)).where(Job.id == job_id))
 
 
 def create_job(db: Session, job_id: str, input_data: DetectionFormInput, owner_id: int | None = None) -> Job:
