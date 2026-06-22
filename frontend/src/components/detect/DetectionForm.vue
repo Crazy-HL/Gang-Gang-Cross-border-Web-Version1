@@ -10,6 +10,26 @@
           </p>
         </div>
 
+        <div class="mt-6 rounded-[1.75rem] border border-blue-100 bg-white p-5 shadow-sm shadow-blue-900/5">
+          <label class="block text-sm font-black text-slate-950">
+            目标国家
+            <select
+              v-model="formData.market"
+              class="mt-3 w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-bold text-slate-900 outline-none transition focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              aria-label="目标国家"
+            >
+              <option value="">请选择目标国家</option>
+              <option value="美国">美国</option>
+              <option value="欧盟">欧盟</option>
+              <option value="英国">英国</option>
+              <option value="加拿大">加拿大</option>
+              <option value="澳大利亚">澳大利亚</option>
+              <option value="日本">日本</option>
+              <option value="全球">暂不确定</option>
+            </select>
+          </label>
+        </div>
+
         <div class="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           <FileUploader :file="file" @file-change="file = $event" />
 
@@ -69,7 +89,7 @@
         >
           开始预检
         </button>
-        <p class="mt-3 text-center text-xs font-bold text-slate-500">至少上传图片或填写一段商品描述</p>
+        <p class="mt-3 text-center text-xs font-bold text-slate-500">请选择目标国家，并上传图片或填写商品描述</p>
       </aside>
     </div>
   </form>

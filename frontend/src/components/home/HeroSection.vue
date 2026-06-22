@@ -155,8 +155,8 @@
                 </div>
 
                 <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
-                  <p class="min-h-5 text-xs font-bold sm:text-sm" :class="messageTone">
-                    {{ message }}
+                  <p class="min-h-5 text-xs font-bold sm:text-sm" :class="displayMessageTone">
+                    {{ displayMessage }}
                   </p>
                   <button
                     type="submit"
@@ -209,6 +209,14 @@ const resultSourceLabel = computed(() => officialHit.value ? '已查询美国官
 const previewSummary = computed(() => {
   const summary = resultPreview.value?.summary ?? ''
   return summary.length > 150 ? `${summary.slice(0, 150)}...` : summary
+})
+const displayMessage = computed(() => {
+  if (!isSubmitting.value && !resultPreview.value && validation.value.errors[0]) return validation.value.errors[0]
+  return message.value
+})
+const displayMessageTone = computed(() => {
+  if (!isSubmitting.value && !resultPreview.value && validation.value.errors[0]) return 'text-orange-800'
+  return messageTone.value
 })
 
 function sleep(ms: number) {

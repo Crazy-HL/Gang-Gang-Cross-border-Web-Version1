@@ -8,6 +8,7 @@ export function validateDetectionForm(input: DetectionFormInput) {
   const errors: string[] = []
   const hasText = Boolean(input.title.trim())
 
+  if (!input.market.trim()) errors.push('请选择目标国家后再开始检测')
   if (!input.hasFile && !hasText) errors.push('请上传商品图片，或输入一段商品描述')
 
   if (input.hasFile && input.file) {
