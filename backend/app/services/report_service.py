@@ -115,6 +115,23 @@ def _status_label(hit: dict[str, Any]) -> str:
     return '有效/存续' if hit.get('alive') else '已失效或终止'
 
 
+def _truncate_text(value: str, limit: int = 240) -> str:
+    text = re.sub(r'\s+', ' ', value).strip()
+    if len(text) <= limit:
+        return text
+    return text[:limit].rstrip(' ,;；') + '...'
+
+
+def _format_hit_brief(hit: dict[str, Any]) -> str:
+    classes = '、'.join(hit.get('classes') or []) or '未列明类别'
+    registration = hit.get('registrationNumber') or '暂无注册号'
+    goods = _truncate_text('；'.join((hit.get('goodsAndServices') or [])[:2]) or 'USPTO 未展示商品/服务摘要')
+    return (
+        f'序列号 {hit["serialNumber"]}，注册号 {registration}，状态{_status_label(hit)}，'
+        f'权利人 {hit["owner"]}，类别 {classes}，商品/服务：{goods}'
+    )
+
+
 def _uspto_hit_score(hit: dict[str, Any]) -> int:
     similarity = float(hit.get('similarity') or 0)
     alive = bool(hit.get('alive'))
@@ -148,19 +165,17 @@ def _build_uspto_report_payload(job: Job, result: dict[str, Any], min_similarity
     risk_level = _risk_level(score)
     product_name = job.title.strip() or job.brand.strip() or result['query']
     classes = '、'.join(top_hit.get('classes') or []) or '未列明类别'
-    registration = top_hit.get('registrationNumber') or '暂无注册号'
-    goods = '；'.join((top_hit.get('goodsAndServices') or [])[:2]) or 'USPTO 结果未展示具体商品/服务'
     design_score = 42 if any(hit.get('designCodeDescription') for hit in top_hits) else 24
     copyright_score = 18
     summary = (
-        f'已优先查询 USPTO 美国官方商标数据库，搜索词“{result["query"]}”共返回 {result.get("total", 0)} 条记录。'
-        f'最相关命中为“{top_hit["wordmark"]}”，状态为{_status_label(top_hit)}，序列号 {top_hit["serialNumber"]}，'
-        f'注册号 {registration}，权利人 {top_hit["owner"]}。该命中覆盖类别：{classes}；商品/服务摘要：{goods}。'
+        f'结论：不建议直接用“{result["query"]}”作为美国站商品品牌名、标题核心词或 Logo 展示。'
+        f'系统已查询 USPTO 美国官方商标数据库，发现与“{result["query"]}”高度相关的官方记录；'
+        f'最相关命中为“{top_hit["wordmark"]}”，状态为{_status_label(top_hit)}，类别覆盖 {classes}。'
     )
     if risk_level == 'high':
-        summary += ' 该结果与当前提交资料中的品牌词高度接近，直接用于美国站上架存在较明显商标风险。'
+        summary += ' 这意味着买家或平台可能会把你的商品与已有商标权利人产生关联，直接上架存在较高商标投诉或下架风险。'
     elif risk_level == 'medium':
-        summary += ' 该结果与当前提交资料存在一定接近度，建议结合商品类目和页面展示方式再确认。'
+        summary += ' 该命中需要结合商品类目、页面展示位置和是否作为品牌使用进一步确认。'
     else:
         summary += ' 当前官方命中关联度不高，但仍建议在最终上架前确认品牌词和页面素材来源。'
 
@@ -183,19 +198,16 @@ def _build_uspto_report_payload(job: Job, result: dict[str, Any], min_similarity
                 'matched': hit['wordmark'],
                 'source': USPTO_SOURCE_NAME,
                 'similarity': hit['similarity'],
-                'description': (
-                    f'USPTO 序列号 {hit["serialNumber"]}，状态{_status_label(hit)}，'
-                    f'权利人 {hit["owner"]}，类别 {"、".join(hit.get("classes") or []) or "未列明"}。'
-                ),
+                'description': _format_hit_brief(hit),
                 'imageUrl': '',
             }
             for index, hit in enumerate(top_hits, start=1)
         ],
         'suggestions': [
-            f'先确认“{result["query"]}”是否会作为品牌名、Logo 或标题核心词展示；如果会展示，建议避开与“{top_hit["wordmark"]}”相同或近似的表达。',
+            f'如果“{result["query"]}”不是你的自有商标或授权品牌，建议不要把它放在标题开头、主图 Logo、包装正面或店铺品牌位。',
             f'重点比对 USPTO 命中的商品/服务类别（{classes}）与当前商品类目是否接近；类目越接近，上架风险越高。',
-            '如果必须使用该词或相关标识，先补充授权、采购来源或自有商标证明；没有证明时建议更换品牌词和包装展示。',
-            '商品图片、包装、详情页文案仍需要继续检查外观和版权素材；USPTO 本次主要覆盖美国商标文字风险。',
+            '如果你有授权或正规采购链路，先准备授权书、采购发票、品牌使用许可等材料，再考虑上架。',
+            '如果没有授权，建议更换品牌词和包装展示，再重新做一次美国商标检测。',
         ],
     }
 

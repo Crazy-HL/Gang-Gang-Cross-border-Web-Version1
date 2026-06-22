@@ -9,16 +9,20 @@
     </div>
 
     <RiskSummary :risk-level="report.riskLevel" :risk-score="report.riskScore" :title="report.title" :summary="report.summary" />
-    <CategoryScoreGrid :scores="report.categoryScores" />
+    <OfficialTrademarkPanel v-if="officialEvidence.length" :evidence="officialEvidence" />
+    <CategoryScoreGrid v-else :scores="report.categoryScores" />
     <SuggestionList :suggestions="report.suggestions" />
     <ReportActions :job-id="report.jobId" :review-status="report.reviewStatus ?? 'none'" :review-note="report.reviewNote ?? ''" />
   </div>
 </template>
 <script setup lang="ts">
+import { computed } from 'vue'
 import RiskSummary from '@/components/results/RiskSummary.vue'
 import CategoryScoreGrid from '@/components/results/CategoryScoreGrid.vue'
+import OfficialTrademarkPanel from '@/components/results/OfficialTrademarkPanel.vue'
 import SuggestionList from '@/components/results/SuggestionList.vue'
 import ReportActions from '@/components/results/ReportActions.vue'
 import type { DetectionReport } from '@/types/domain'
-defineProps<{ report: DetectionReport; mode?: 'result' | 'report' }>()
+const props = defineProps<{ report: DetectionReport; mode?: 'result' | 'report' }>()
+const officialEvidence = computed(() => props.report.evidence.filter((item) => item.source.includes('USPTO')))
 </script>
