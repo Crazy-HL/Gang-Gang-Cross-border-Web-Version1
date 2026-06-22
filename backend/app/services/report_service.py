@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.db.base import Job, Report
 from app.repositories import model_config_repository, report_repository
+from app.services.uspto_service import is_us_market, search_us_trademarks
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +72,143 @@ def _fallback_report_payload(job: Job):
             '详情页图片、图案和文案尽量使用自有素材；来源不清的素材先替换或补充授权证明。',
         ],
     }
+
+
+_PLACEHOLDER_BRANDS = {'', '待识别品牌', '未明确品牌', 'auto', 'unknown', 'n/a', 'na'}
+_SEARCH_STOPWORDS = {
+    'amazon',
+    'shein',
+    'target',
+    'platform',
+    'product',
+    'listing',
+    'shop',
+    'store',
+    'free',
+    'test',
+}
+
+
+def _clean_search_term(value: str) -> str:
+    text = re.sub(r'https?://\S+', ' ', value)
+    text = re.sub(r'目标平台[:：].*', ' ', text)
+    text = re.sub(r'平台[:：].*', ' ', text)
+    text = re.sub(r'\s+', ' ', text).strip(' -_　')
+    return text[:80]
+
+
+def _us_official_search_term(job: Job) -> str:
+    brand = _clean_search_term(job.brand or '')
+    if brand.lower() not in _PLACEHOLDER_BRANDS:
+        return brand
+
+    title = _clean_search_term(job.title or '')
+    english_terms = re.findall(r'[A-Za-z][A-Za-z0-9&\'-]{2,}', title)
+    brand_like_terms = [term for term in english_terms if term.lower() not in _SEARCH_STOPWORDS]
+    if brand_like_terms:
+        return brand_like_terms[0]
+    return title
+
+
+def _status_label(hit: dict[str, Any]) -> str:
+    return '有效/存续' if hit.get('alive') else '已失效或终止'
+
+
+def _uspto_hit_score(hit: dict[str, Any]) -> int:
+    similarity = float(hit.get('similarity') or 0)
+    alive = bool(hit.get('alive'))
+    registered = bool(hit.get('registrationNumber'))
+    if alive and similarity >= 0.96:
+        score = 88
+    elif alive and similarity >= 0.8:
+        score = 78
+    elif alive and similarity >= 0.45:
+        score = 66
+    elif similarity >= 0.96:
+        score = 58
+    elif similarity >= 0.8:
+        score = 50
+    else:
+        score = 42
+    if alive and registered:
+        score += 4
+    return min(score, 96)
+
+
+def _build_uspto_report_payload(job: Job, result: dict[str, Any]) -> dict[str, Any] | None:
+    hits = result.get('hits') or []
+    relevant_hits = [hit for hit in hits if float(hit.get('similarity') or 0) >= 0.45]
+    if not relevant_hits:
+        return None
+
+    top_hits = relevant_hits[:3]
+    top_hit = top_hits[0]
+    score = min(_uspto_hit_score(top_hit) + min(len(relevant_hits) - 1, 6), 98)
+    risk_level = _risk_level(score)
+    product_name = job.title.strip() or job.brand.strip() or result['query']
+    classes = '、'.join(top_hit.get('classes') or []) or '未列明类别'
+    registration = top_hit.get('registrationNumber') or '暂无注册号'
+    goods = '；'.join((top_hit.get('goodsAndServices') or [])[:2]) or 'USPTO 结果未展示具体商品/服务'
+    design_score = 42 if any(hit.get('designCodeDescription') for hit in top_hits) else 24
+    copyright_score = 18
+    summary = (
+        f'已优先查询 USPTO 美国官方商标数据库，搜索词“{result["query"]}”共返回 {result.get("total", 0)} 条记录。'
+        f'最相关命中为“{top_hit["wordmark"]}”，状态为{_status_label(top_hit)}，序列号 {top_hit["serialNumber"]}，'
+        f'注册号 {registration}，权利人 {top_hit["owner"]}。该命中覆盖类别：{classes}；商品/服务摘要：{goods}。'
+    )
+    if risk_level == 'high':
+        summary += ' 该结果与当前提交资料中的品牌词高度接近，直接用于美国站上架存在较明显商标风险。'
+    elif risk_level == 'medium':
+        summary += ' 该结果与当前提交资料存在一定接近度，建议结合商品类目和页面展示方式再确认。'
+    else:
+        summary += ' 当前官方命中关联度不高，但仍建议在最终上架前确认品牌词和页面素材来源。'
+
+    return {
+        'id': f'r-{job.id}',
+        'jobId': job.id,
+        'title': f'{product_name} 美国商标官方预检报告',
+        'riskLevel': risk_level,
+        'riskScore': score,
+        'summary': summary,
+        'categoryScores': [
+            {'type': 'trademark', 'label': '商标近似', 'score': score, 'hits': len(relevant_hits)},
+            {'type': 'design', 'label': '外观相似', 'score': design_score, 'hits': 1 if design_score >= 45 else 0},
+            {'type': 'copyright', 'label': '版权素材', 'score': copyright_score, 'hits': 0},
+        ],
+        'evidence': [
+            {
+                'id': f'uspto-{hit["serialNumber"] or index}',
+                'category': 'trademark',
+                'matched': hit['wordmark'],
+                'source': 'USPTO Trademark Search',
+                'similarity': hit['similarity'],
+                'description': (
+                    f'USPTO 序列号 {hit["serialNumber"]}，状态{_status_label(hit)}，'
+                    f'权利人 {hit["owner"]}，类别 {"、".join(hit.get("classes") or []) or "未列明"}。'
+                ),
+                'imageUrl': '',
+            }
+            for index, hit in enumerate(top_hits, start=1)
+        ],
+        'suggestions': [
+            f'先确认“{result["query"]}”是否会作为品牌名、Logo 或标题核心词展示；如果会展示，建议避开与“{top_hit["wordmark"]}”相同或近似的表达。',
+            f'重点比对 USPTO 命中的商品/服务类别（{classes}）与当前商品类目是否接近；类目越接近，上架风险越高。',
+            '如果必须使用该词或相关标识，先补充授权、采购来源或自有商标证明；没有证明时建议更换品牌词和包装展示。',
+            '商品图片、包装、详情页文案仍需要继续检查外观和版权素材；USPTO 本次主要覆盖美国商标文字风险。',
+        ],
+    }
+
+
+async def _official_us_report_payload(job: Job) -> dict[str, Any] | None:
+    if not is_us_market(job.market):
+        return None
+    query = _us_official_search_term(job)
+    if not query:
+        return None
+    result = await search_us_trademarks(query, limit=10)
+    if not result.get('hits'):
+        return None
+    return _build_uspto_report_payload(job, result)
 
 
 def _format_prompt(job: Job) -> str:
@@ -270,12 +408,18 @@ def generate_report_for_job(db: Session, job: Job):
     existing = report_repository.get_report(db, job.id)
     if existing:
         return existing
+    payload = None
     try:
-        data = asyncio.run(_call_model(db, job))
-        payload = _build_report_payload(job, data)
+        payload = asyncio.run(_official_us_report_payload(job))
     except Exception:
-        logger.exception('model report generation failed for job %s, using fallback report', job.id)
-        payload = _fallback_report_payload(job)
+        logger.exception('official source lookup failed for job %s, falling back to model', job.id)
+    if payload is None:
+        try:
+            data = asyncio.run(_call_model(db, job))
+            payload = _build_report_payload(job, data)
+        except Exception:
+            logger.exception('model report generation failed for job %s, using fallback report', job.id)
+            payload = _fallback_report_payload(job)
     return report_repository.create_report(db, payload)
 
 
