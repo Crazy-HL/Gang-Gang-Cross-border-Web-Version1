@@ -11,9 +11,10 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.config import get_settings
 from app.db.base import Job, Report
 from app.repositories import model_config_repository, report_repository
-from app.services.uspto_service import is_us_market, search_us_trademarks
+from app.services.uspto_service import USPTO_SOURCE_NAME, is_us_market, search_us_trademarks
 
 logger = logging.getLogger(__name__)
 
@@ -135,9 +136,9 @@ def _uspto_hit_score(hit: dict[str, Any]) -> int:
     return min(score, 96)
 
 
-def _build_uspto_report_payload(job: Job, result: dict[str, Any]) -> dict[str, Any] | None:
+def _build_uspto_report_payload(job: Job, result: dict[str, Any], min_similarity: float) -> dict[str, Any] | None:
     hits = result.get('hits') or []
-    relevant_hits = [hit for hit in hits if float(hit.get('similarity') or 0) >= 0.45]
+    relevant_hits = [hit for hit in hits if float(hit.get('similarity') or 0) >= min_similarity]
     if not relevant_hits:
         return None
 
@@ -180,7 +181,7 @@ def _build_uspto_report_payload(job: Job, result: dict[str, Any]) -> dict[str, A
                 'id': f'uspto-{hit["serialNumber"] or index}',
                 'category': 'trademark',
                 'matched': hit['wordmark'],
-                'source': 'USPTO Trademark Search',
+                'source': USPTO_SOURCE_NAME,
                 'similarity': hit['similarity'],
                 'description': (
                     f'USPTO 序列号 {hit["serialNumber"]}，状态{_status_label(hit)}，'
@@ -205,10 +206,13 @@ async def _official_us_report_payload(job: Job) -> dict[str, Any] | None:
     query = _us_official_search_term(job)
     if not query:
         return None
-    result = await search_us_trademarks(query, limit=10)
+    settings = get_settings()
+    result = await search_us_trademarks(query, limit=settings.uspto_max_results)
+    if result.get('lookupStatus') != 'ok':
+        return None
     if not result.get('hits'):
         return None
-    return _build_uspto_report_payload(job, result)
+    return _build_uspto_report_payload(job, result, settings.uspto_min_similarity)
 
 
 def _format_prompt(job: Job) -> str:

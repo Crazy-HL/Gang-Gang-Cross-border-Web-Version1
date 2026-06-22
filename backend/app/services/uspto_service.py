@@ -1,14 +1,26 @@
 from __future__ import annotations
 
+import asyncio
+import copy
 import html
+import logging
 import re
+import time
 from typing import Any
 
 import httpx
 
+from app.core.config import get_settings
+
+
+logger = logging.getLogger(__name__)
 
 USPTO_SEARCH_URL = 'https://tmsearch.uspto.gov/prod-v1-0-0/tmsearch'
 USPTO_TSDR_URL = 'https://tsdr.uspto.gov/#caseNumber=%s&caseSearchType=US_APPLICATION&caseType=DEFAULT&searchType=statusSearch'
+USPTO_SOURCE_NAME = 'USPTO Trademark Search'
+
+_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
+_CACHE_LOCK = asyncio.Lock()
 
 _SOURCE_FIELDS = [
     'abandonDate',
@@ -92,6 +104,10 @@ def _strip_highlight(value: Any) -> str:
 
 def _normalize_mark(value: str) -> str:
     return re.sub(r'[^a-z0-9]+', '', value.lower())
+
+
+def _cache_key(query: str, limit: int) -> str:
+    return f'{_normalize_mark(query)}:{limit}'
 
 
 def _as_list(value: Any) -> list[str]:
@@ -180,28 +196,90 @@ def _normalize_hit(hit: dict[str, Any], query: str) -> dict[str, Any]:
     }
 
 
+async def _get_cached_result(key: str) -> dict[str, Any] | None:
+    now = time.monotonic()
+    async with _CACHE_LOCK:
+        cached = _CACHE.get(key)
+        if not cached:
+            return None
+        expires_at, value = cached
+        if expires_at <= now:
+            _CACHE.pop(key, None)
+            return None
+        result = copy.deepcopy(value)
+        result['cached'] = True
+        return result
+
+
+async def _set_cached_result(key: str, value: dict[str, Any], ttl_seconds: int) -> None:
+    if ttl_seconds <= 0:
+        return
+    async with _CACHE_LOCK:
+        _CACHE[key] = (time.monotonic() + ttl_seconds, copy.deepcopy(value))
+
+
+def _empty_result(query: str, status: str = 'empty') -> dict[str, Any]:
+    return {
+        'query': query,
+        'total': 0,
+        'hits': [],
+        'source': USPTO_SOURCE_NAME,
+        'sourceUrl': 'https://tmsearch.uspto.gov/',
+        'lookupStatus': status,
+        'cached': False,
+    }
+
+
 async def search_us_trademarks(query: str, limit: int = 10) -> dict[str, Any]:
     clean_query = query.strip()
     if not clean_query:
-        return {'query': clean_query, 'total': 0, 'hits': []}
+        return _empty_result(clean_query)
+    settings = get_settings()
+    if not settings.uspto_lookup_enabled:
+        return _empty_result(clean_query, 'disabled')
+    limit = max(1, min(limit, settings.uspto_max_results))
+    key = _cache_key(clean_query, limit)
+    cached_result = await _get_cached_result(key)
+    if cached_result is not None:
+        return cached_result
+
     headers = {
         'User-Agent': 'Mozilla/5.0',
         'Accept': 'application/json',
         'Origin': 'https://tmsearch.uspto.gov',
         'Referer': 'https://tmsearch.uspto.gov/',
     }
-    async with httpx.AsyncClient(timeout=30, headers=headers) as client:
-        response = await client.post(USPTO_SEARCH_URL, json=build_wordmark_payload(clean_query, limit))
-        response.raise_for_status()
-        body = response.json()
+    body: dict[str, Any] | None = None
+    async with httpx.AsyncClient(timeout=settings.uspto_timeout_seconds, headers=headers) as client:
+        for attempt in range(2):
+            try:
+                response = await client.post(USPTO_SEARCH_URL, json=build_wordmark_payload(clean_query, limit))
+                if response.status_code in {429, 500, 502, 503, 504} and attempt == 0:
+                    await asyncio.sleep(0.6)
+                    continue
+                response.raise_for_status()
+                body = response.json()
+                break
+            except (httpx.HTTPStatusError, httpx.RequestError, ValueError):
+                if attempt == 1:
+                    logger.exception('USPTO lookup failed for query %s', clean_query)
+                    raise
+                await asyncio.sleep(0.6)
+    if body is None:
+        return _empty_result(clean_query, 'failed')
+
     hits = body.get('hits') or {}
     raw_hits = hits.get('hits') or []
     normalized_hits = [_normalize_hit(hit, clean_query) for hit in raw_hits]
     normalized_hits.sort(key=lambda item: (item['alive'], item['similarity'], item['score']), reverse=True)
-    return {
+    result = {
         'query': clean_query,
         'total': int(hits.get('totalValue') or 0),
         'hits': normalized_hits,
-        'source': 'USPTO Trademark Search',
+        'source': USPTO_SOURCE_NAME,
         'sourceUrl': 'https://tmsearch.uspto.gov/',
+        'lookupStatus': 'ok',
+        'cached': False,
     }
+    await _set_cached_result(key, result, settings.uspto_cache_ttl_seconds)
+    return result

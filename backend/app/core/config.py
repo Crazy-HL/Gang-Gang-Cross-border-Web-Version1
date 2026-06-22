@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     sms_endpoint: str = 'dysmsapi.aliyuncs.com'
     alibaba_cloud_access_key_id: str = Field(default='', validation_alias='ALIBABA_CLOUD_ACCESS_KEY_ID')
     alibaba_cloud_access_key_secret: str = Field(default='', validation_alias='ALIBABA_CLOUD_ACCESS_KEY_SECRET')
+    uspto_lookup_enabled: bool = True
+    uspto_timeout_seconds: float = 20
+    uspto_cache_ttl_seconds: int = 24 * 60 * 60
+    uspto_min_similarity: float = 0.45
+    uspto_max_results: int = 20
 
     model_config = SettingsConfigDict(env_prefix='GANGGANG_', env_file='.env', extra='ignore')
 

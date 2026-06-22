@@ -378,6 +378,22 @@ backend/.env
 GANGGANG_DATABASE_URL=mysql+pymysql://用户名:密码@主机:3306/数据库名?charset=utf8mb4
 ```
 
+官方查询配置：
+
+```text
+GANGGANG_USPTO_LOOKUP_ENABLED=true
+GANGGANG_USPTO_TIMEOUT_SECONDS=20
+GANGGANG_USPTO_CACHE_TTL_SECONDS=86400
+GANGGANG_USPTO_MIN_SIMILARITY=0.45
+GANGGANG_USPTO_MAX_RESULTS=20
+```
+
+说明：
+
+- 美国市场报告会先查询 USPTO 官方商标库；相关命中足够明确时使用官方数据生成报告。
+- USPTO 查询结果默认缓存 24 小时，减少重复调用和被限流风险。
+- USPTO 查询失败、关闭、超时、无相关命中时，继续走大模型报告逻辑。
+
 已实现：
 
 - SQLAlchemy 连接池
