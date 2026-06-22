@@ -12,7 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
-from app.db.base import Job, Report
+from app.db.base import Evidence, Job, Report
 from app.repositories import model_config_repository, report_repository
 from app.services.uspto_service import USPTO_SOURCE_NAME, is_us_market, search_us_trademarks
 
@@ -212,6 +212,33 @@ def _build_uspto_report_payload(job: Job, result: dict[str, Any], min_similarity
     }
 
 
+def _build_uspto_no_hit_evidence(job: Job, result: dict[str, Any], min_similarity: float) -> dict[str, Any] | None:
+    if result.get('lookupStatus') != 'ok':
+        return None
+    query = result.get('query') or _us_official_search_term(job)
+    if not query:
+        return None
+    weak_hits = [
+        hit['wordmark']
+        for hit in (result.get('hits') or [])[:3]
+        if float(hit.get('similarity') or 0) < min_similarity
+    ]
+    weak_text = f' USPTO 返回的弱相关记录包括：{"、".join(weak_hits)}。' if weak_hits else ''
+    return {
+        'id': f'uspto-no-hit-{job.id}',
+        'category': 'trademark',
+        'matched': f'{query}（未发现明确命中）',
+        'source': USPTO_SOURCE_NAME,
+        'similarity': 0,
+        'description': (
+            f'已查询 USPTO 美国官方商标数据库，搜索词“{query}”未发现名称相似度达到 '
+            f'{int(min_similarity * 100)}% 的明确商标命中。{weak_text}'
+            '因此本报告继续使用智能预检判断，请结合品牌使用方式和商品类目复核。'
+        ),
+        'imageUrl': '',
+    }
+
+
 def _has_uspto_evidence(report: Report | None) -> bool:
     if not report:
         return False
@@ -233,6 +260,21 @@ async def _official_us_report_payload(job: Job) -> dict[str, Any] | None:
     return _build_uspto_report_payload(job, result, settings.uspto_min_similarity)
 
 
+async def _official_us_lookup(job: Job) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    if not is_us_market(job.market):
+        return None, None
+    query = _us_official_search_term(job)
+    if not query:
+        return None, None
+    settings = get_settings()
+    result = await search_us_trademarks(query, limit=settings.uspto_max_results)
+    if result.get('lookupStatus') != 'ok':
+        return None, None
+    payload = _build_uspto_report_payload(job, result, settings.uspto_min_similarity)
+    note = _build_uspto_no_hit_evidence(job, result, settings.uspto_min_similarity) if payload is None else None
+    return payload, note
+
+
 def _replace_existing_report(db: Session, existing: Report, payload: dict[str, Any]):
     db.delete(existing)
     db.commit()
@@ -243,13 +285,31 @@ def _refresh_with_official_report_if_needed(db: Session, job: Job, existing: Rep
     if not existing or _has_uspto_evidence(existing) or not is_us_market(job.market):
         return existing
     try:
-        payload = asyncio.run(_official_us_report_payload(job))
+        payload, note = asyncio.run(_official_us_lookup(job))
     except Exception:
         logger.exception('official report refresh failed for job %s', job.id)
         return existing
-    if payload is None:
-        return existing
-    return _replace_existing_report(db, existing, payload)
+    if payload is not None:
+        return _replace_existing_report(db, existing, payload)
+    if note is not None:
+        existing.evidence.append(Evidence(report_id=existing.id, **{
+            'id': note['id'],
+            'category': note['category'],
+            'matched': note['matched'],
+            'source': note['source'],
+            'similarity': note['similarity'],
+            'description': note['description'],
+            'image_url': note['imageUrl'],
+        }))
+        db.commit()
+        db.refresh(existing)
+    return existing
+
+
+def _append_evidence(payload: dict[str, Any], item: dict[str, Any] | None) -> dict[str, Any]:
+    if item is not None:
+        payload.setdefault('evidence', []).append(item)
+    return payload
 
 
 def _format_prompt(job: Job) -> str:
@@ -450,17 +510,18 @@ def generate_report_for_job(db: Session, job: Job):
     if existing:
         return _refresh_with_official_report_if_needed(db, job, existing)
     payload = None
+    official_note = None
     try:
-        payload = asyncio.run(_official_us_report_payload(job))
+        payload, official_note = asyncio.run(_official_us_lookup(job))
     except Exception:
         logger.exception('official source lookup failed for job %s, falling back to model', job.id)
     if payload is None:
         try:
             data = asyncio.run(_call_model(db, job))
-            payload = _build_report_payload(job, data)
+            payload = _append_evidence(_build_report_payload(job, data), official_note)
         except Exception:
             logger.exception('model report generation failed for job %s, using fallback report', job.id)
-            payload = _fallback_report_payload(job)
+            payload = _append_evidence(_fallback_report_payload(job), official_note)
     return report_repository.create_report(db, payload)
 
 

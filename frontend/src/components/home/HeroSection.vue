@@ -143,7 +143,7 @@
                   </div>
                   <p class="mt-3 text-sm leading-6 text-slate-700">{{ previewSummary }}</p>
                   <div v-if="officialHit" class="mt-3 rounded-2xl border border-white/80 bg-white/80 p-3">
-                    <p class="text-xs font-black text-blue-700">官方命中：{{ officialHit.matched }}</p>
+                    <p class="text-xs font-black text-blue-700">官方查询：{{ officialHit.matched }}</p>
                     <p class="mt-1 text-xs leading-5 text-slate-600">{{ officialHit.description }}</p>
                   </div>
                   <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
