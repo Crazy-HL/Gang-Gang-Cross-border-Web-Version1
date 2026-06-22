@@ -212,6 +212,12 @@ def _build_uspto_report_payload(job: Job, result: dict[str, Any], min_similarity
     }
 
 
+def _has_uspto_evidence(report: Report | None) -> bool:
+    if not report:
+        return False
+    return any(USPTO_SOURCE_NAME in (item.source or '') for item in report.evidence)
+
+
 async def _official_us_report_payload(job: Job) -> dict[str, Any] | None:
     if not is_us_market(job.market):
         return None
@@ -225,6 +231,25 @@ async def _official_us_report_payload(job: Job) -> dict[str, Any] | None:
     if not result.get('hits'):
         return None
     return _build_uspto_report_payload(job, result, settings.uspto_min_similarity)
+
+
+def _replace_existing_report(db: Session, existing: Report, payload: dict[str, Any]):
+    db.delete(existing)
+    db.commit()
+    return report_repository.create_report(db, payload)
+
+
+def _refresh_with_official_report_if_needed(db: Session, job: Job, existing: Report | None):
+    if not existing or _has_uspto_evidence(existing) or not is_us_market(job.market):
+        return existing
+    try:
+        payload = asyncio.run(_official_us_report_payload(job))
+    except Exception:
+        logger.exception('official report refresh failed for job %s', job.id)
+        return existing
+    if payload is None:
+        return existing
+    return _replace_existing_report(db, existing, payload)
 
 
 def _format_prompt(job: Job) -> str:
@@ -423,7 +448,7 @@ async def _call_model(db: Session, job: Job) -> dict[str, Any]:
 def generate_report_for_job(db: Session, job: Job):
     existing = report_repository.get_report(db, job.id)
     if existing:
-        return existing
+        return _refresh_with_official_report_if_needed(db, job, existing)
     payload = None
     try:
         payload = asyncio.run(_official_us_report_payload(job))
@@ -448,6 +473,7 @@ def ensure_demo_report_for_job(db: Session, job: Job):
 
 def get_user_job_results(db: Session, job: Job):
     report = report_repository.get_report(db, job.id)
+    report = _refresh_with_official_report_if_needed(db, job, report)
     return report_repository.report_to_dict(report) if report else None
 
 
