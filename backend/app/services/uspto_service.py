@@ -6,6 +6,7 @@ import html
 import logging
 import re
 import time
+from difflib import SequenceMatcher
 from typing import Any
 
 import httpx
@@ -121,6 +122,7 @@ def _as_list(value: Any) -> list[str]:
 
 def build_wordmark_payload(query: str, limit: int = 10) -> dict[str, Any]:
     general_fields = ['goodsAndServices', 'markDescription', 'ownerName', 'translate', 'wordmark', 'wordmarkPseudoText']
+    normalized_query = _normalize_mark(query)
     should = [
         {'query_string': {'query': f'{query}*', 'default_operator': 'AND', 'fields': general_fields}},
         {'term': {'WM': {'value': query, 'boost': 6}}},
@@ -129,6 +131,17 @@ def build_wordmark_payload(query: str, limit: int = 10) -> dict[str, Any]:
         {'term': {'SN': {'value': query}}},
         {'term': {'RN': {'value': query}}},
     ]
+    if len(normalized_query) >= 5:
+        fuzzy_distance = 1 if len(normalized_query) <= 6 else 2
+        should.append(
+            {
+                'query_string': {
+                    'query': f'{normalized_query}~{fuzzy_distance}',
+                    'default_operator': 'AND',
+                    'fields': ['wordmark', 'wordmarkPseudoText'],
+                }
+            }
+        )
     return {
         'query': {'bool': {'must': [{'bool': {'should': should}}]}},
         'size': limit,
@@ -158,11 +171,13 @@ def _similarity(query: str, wordmark: str) -> float:
         return 0.98
     if normalized_query in normalized_mark or normalized_mark in normalized_query:
         return 0.86
+    char_score = SequenceMatcher(None, normalized_query, normalized_mark).ratio()
     query_tokens = set(re.findall(r'[a-z0-9]+', query.lower()))
     mark_tokens = set(re.findall(r'[a-z0-9]+', wordmark.lower()))
     if not query_tokens or not mark_tokens:
-        return 0.45
-    return round(len(query_tokens & mark_tokens) / len(query_tokens | mark_tokens), 2)
+        return round(char_score, 2)
+    token_score = len(query_tokens & mark_tokens) / len(query_tokens | mark_tokens)
+    return round(max(char_score, token_score), 2)
 
 
 def _normalize_hit(hit: dict[str, Any], query: str) -> dict[str, Any]:

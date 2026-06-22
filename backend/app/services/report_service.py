@@ -245,6 +245,12 @@ def _has_uspto_evidence(report: Report | None) -> bool:
     return any(USPTO_SOURCE_NAME in (item.source or '') for item in report.evidence)
 
 
+def _has_uspto_positive_evidence(report: Report | None) -> bool:
+    if not report:
+        return False
+    return any(USPTO_SOURCE_NAME in (item.source or '') and float(item.similarity or 0) > 0 for item in report.evidence)
+
+
 async def _official_us_report_payload(job: Job) -> dict[str, Any] | None:
     if not is_us_market(job.market):
         return None
@@ -282,7 +288,7 @@ def _replace_existing_report(db: Session, existing: Report, payload: dict[str, A
 
 
 def _refresh_with_official_report_if_needed(db: Session, job: Job, existing: Report | None):
-    if not existing or _has_uspto_evidence(existing) or not is_us_market(job.market):
+    if not existing or _has_uspto_positive_evidence(existing) or not is_us_market(job.market):
         return existing
     try:
         payload, note = asyncio.run(_official_us_lookup(job))
@@ -291,7 +297,7 @@ def _refresh_with_official_report_if_needed(db: Session, job: Job, existing: Rep
         return existing
     if payload is not None:
         return _replace_existing_report(db, existing, payload)
-    if note is not None:
+    if note is not None and not _has_uspto_evidence(existing):
         existing.evidence.append(Evidence(report_id=existing.id, **{
             'id': note['id'],
             'category': note['category'],
