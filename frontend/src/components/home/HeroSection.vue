@@ -131,6 +131,29 @@
                   </div>
                 </div>
 
+                <div v-if="resultPreview" class="rounded-[1.25rem] border border-orange-200 bg-[linear-gradient(135deg,#fff7ed_0%,#ffffff_62%,#eff6ff_100%)] p-4 shadow-sm shadow-orange-900/5">
+                  <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p class="text-xs font-black text-orange-800">{{ resultSourceLabel }}</p>
+                      <h3 class="mt-1 text-lg font-black text-slate-950">{{ resultPreview.title }}</h3>
+                    </div>
+                    <span class="w-fit rounded-full px-3 py-1.5 text-xs font-black" :style="{ color: resultMeta.color, background: resultMeta.backgroundColor }">
+                      {{ resultMeta.label }}
+                    </span>
+                  </div>
+                  <p class="mt-3 text-sm leading-6 text-slate-700">{{ previewSummary }}</p>
+                  <div v-if="officialHit" class="mt-3 rounded-2xl border border-white/80 bg-white/80 p-3">
+                    <p class="text-xs font-black text-blue-700">官方命中：{{ officialHit.matched }}</p>
+                    <p class="mt-1 text-xs leading-5 text-slate-600">{{ officialHit.description }}</p>
+                  </div>
+                  <div class="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-xs font-bold text-slate-500">这里只展示简版结论，完整命中记录和处理建议在报告页查看。</p>
+                    <RouterLink :to="`/results/${resultPreview.jobId}`" class="rounded-full bg-blue-600 px-4 py-2.5 text-center text-xs font-black text-white transition hover:bg-blue-700">
+                      查看完整报告
+                    </RouterLink>
+                  </div>
+                </div>
+
                 <div class="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
                   <p class="min-h-5 text-xs font-bold sm:text-sm" :class="messageTone">
                     {{ message }}
@@ -140,7 +163,7 @@
                     :disabled="!validation.isValid || isSubmitting"
                     class="rounded-full bg-gold px-6 py-3 text-sm font-black text-white shadow-glow transition hover:bg-blue-600 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500 disabled:shadow-none"
                   >
-                    {{ isSubmitting ? '提交中...' : '免费检测' }}
+                    {{ isSubmitting ? '检测中...' : resultPreview ? '重新检测' : '免费检测' }}
                   </button>
                 </div>
               </div>
@@ -157,9 +180,10 @@
 import { computed, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import ButtonLink from '@/components/ui/ButtonLink.vue'
-import { createJob, getJobStatus, runJob, uploadJobFile } from '@/api/client'
+import { createJob, getJobResults, getJobStatus, runJob, uploadJobFile } from '@/api/client'
+import { getRiskMeta } from '@/utils/risk'
 import { validateDetectionForm } from '@/utils/validation'
-import type { DetectionFormInput } from '@/types/domain'
+import type { DetectionFormInput, DetectionReport } from '@/types/domain'
 
 const router = useRouter()
 const file = ref<File | null>(null)
@@ -169,6 +193,7 @@ const progress = ref(0)
 const progressLabel = ref('')
 const message = ref('上传图片或填写一段描述即可开始。')
 const messageTone = ref('text-slate-500')
+const resultPreview = ref<DetectionReport | null>(null)
 const formData = reactive<DetectionFormInput>({ detectionType: '', brand: '', category: '', market: '', productLink: '', title: '', hasFile: false })
 const validation = computed(() => validateDetectionForm({ ...formData, hasFile: Boolean(file.value), file: file.value ? { name: file.value.name, type: file.value.type, size: file.value.size } : undefined }))
 
@@ -177,6 +202,14 @@ const metrics = [
   { value: '初步预检', label: '商标/外观/版权' },
   { value: '风险建议', label: '下一步怎么做' }
 ]
+
+const resultMeta = computed(() => getRiskMeta(resultPreview.value?.riskLevel ?? 'pending'))
+const officialHit = computed(() => resultPreview.value?.evidence.find((item) => item.source.includes('USPTO')) ?? null)
+const resultSourceLabel = computed(() => officialHit.value ? '已查询美国官方商标库' : '智能预检简版结果')
+const previewSummary = computed(() => {
+  const summary = resultPreview.value?.summary ?? ''
+  return summary.length > 150 ? `${summary.slice(0, 150)}...` : summary
+})
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -194,25 +227,27 @@ function handleFileChange(event: Event) {
 }
 
 async function waitForReport(jobId: string) {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (let attempt = 0; attempt < 70; attempt += 1) {
     const job = await getJobStatus(jobId)
 
     if (job.status === 'done') {
+      progress.value = 96
+      progressLabel.value = '正在读取报告'
+      message.value = '报告已生成，正在整理首页简版结论。'
+      const report = await getJobResults(jobId)
       progress.value = 100
-      progressLabel.value = '报告已生成'
-      message.value = '报告已生成，正在打开...'
-      await sleep(350)
-      return
+      progressLabel.value = '简版结果已生成'
+      return report
     }
 
     if (job.status === 'failed') {
       throw new Error('report generation failed')
     }
 
-    const base = job.status === 'processing' ? 58 : 46
-    progress.value = Math.min(94, base + attempt * 3)
+    const base = job.status === 'processing' ? 58 : 42
+    progress.value = Math.min(94, base + attempt * 2)
     progressLabel.value = job.status === 'processing' ? '正在生成报告' : '任务已提交，正在排队'
-    message.value = job.status === 'processing' ? '正在分析商品资料，请稍候。' : '任务已提交，正在准备检测。'
+    message.value = job.status === 'processing' ? '正在查询官方库并生成报告，请稍候。' : '任务已提交，正在准备检测。'
     await sleep(1500)
   }
 
@@ -227,6 +262,7 @@ async function handleHeroSubmit() {
   }
 
   isSubmitting.value = true
+  resultPreview.value = null
   progress.value = 12
   progressLabel.value = '正在提交资料'
   message.value = '正在提交资料...'
@@ -246,15 +282,16 @@ async function handleHeroSubmit() {
     await runJob(created.jobId)
     progress.value = 56
     progressLabel.value = '正在生成报告'
-    await waitForReport(created.jobId)
-    await router.push(`/results/${created.jobId}`)
+    resultPreview.value = await waitForReport(created.jobId)
+    message.value = '简版结果已生成，可继续查看完整报告。'
+    messageTone.value = 'text-blue-700'
   } catch (error) {
     const reason = error instanceof Error ? error.message : ''
     if (reason.includes('401') || reason.includes('403')) {
       await router.push(`/auth?redirect=${encodeURIComponent('/detect')}`)
       return
     }
-    message.value = reason.includes('failed') ? '报告生成失败，请重新提交。' : reason.includes('timeout') ? '报告生成时间较长，请稍后查看任务。' : '提交失败，请稍后再试。'
+    message.value = reason.includes('failed') ? '报告生成失败，请重新提交。' : reason.includes('timeout') ? '报告生成时间较长，请稍后到任务列表查看。' : '提交失败，请稍后再试。'
     messageTone.value = 'text-orange-800'
   } finally {
     isSubmitting.value = false
