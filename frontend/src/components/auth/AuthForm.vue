@@ -1,37 +1,37 @@
 <template>
-  <form class="mx-auto max-w-md rounded-[2rem] border border-white/10 bg-panel/80 p-7 shadow-2xl" @submit.prevent="handleSubmit">
-    <div class="mb-6 flex rounded-full border border-white/10 bg-ink-2 p-1">
+  <form class="mx-auto max-w-md rounded-[2rem] border border-slate-200/80 bg-panel/80 p-7 shadow-2xl" @submit.prevent="handleSubmit">
+    <div class="mb-6 flex rounded-full border border-slate-200/80 bg-ink-2 p-1">
       <button type="button" @click="mode = 'login'" :class="mode === 'login' ? activeTab : inactiveTab">登录</button>
       <button type="button" @click="mode = 'register'" :class="mode === 'register' ? activeTab : inactiveTab">注册</button>
     </div>
 
-    <div v-if="mode === 'login'" class="mb-5 flex rounded-full border border-white/10 bg-ink-2 p-1">
+    <div v-if="mode === 'login'" class="mb-5 flex rounded-full border border-slate-200/80 bg-ink-2 p-1">
       <button type="button" @click="loginMethod = 'password'" :class="loginMethod === 'password' ? activeSmallTab : inactiveSmallTab">密码登录</button>
       <button type="button" @click="loginMethod = 'code'" :class="loginMethod === 'code' ? activeSmallTab : inactiveSmallTab">验证码登录</button>
     </div>
 
-    <label class="block text-sm font-semibold text-white">
+    <label class="block text-sm font-semibold text-slate-950">
       手机号
-      <input v-model="mobile" aria-label="手机号" class="mt-2 w-full rounded-2xl border border-white/10 bg-ink-2 px-4 py-3 text-slate-100" placeholder="13800000000" />
+      <input v-model="mobile" aria-label="手机号" class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900" placeholder="13800000000" />
     </label>
 
-    <label v-if="mode === 'login' && loginMethod === 'password' || mode === 'register'" class="mt-5 block text-sm font-semibold text-white">
+    <label v-if="mode === 'login' && loginMethod === 'password' || mode === 'register'" class="mt-5 block text-sm font-semibold text-slate-950">
       密码
-      <input v-model="password" type="password" aria-label="密码" class="mt-2 w-full rounded-2xl border border-white/10 bg-ink-2 px-4 py-3 text-slate-100" placeholder="至少 6 位密码" />
+      <input v-model="password" type="password" aria-label="密码" class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900" placeholder="至少 6 位密码" />
     </label>
 
     <div v-if="mode === 'register' || loginMethod === 'code'" class="mt-5 grid grid-cols-[1fr_auto] gap-3">
-      <label class="block text-sm font-semibold text-white">
+      <label class="block text-sm font-semibold text-slate-950">
         验证码
-        <input v-model="code" aria-label="验证码" class="mt-2 w-full rounded-2xl border border-white/10 bg-ink-2 px-4 py-3 text-slate-100" />
+        <input v-model="code" aria-label="验证码" class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900" />
       </label>
-      <button type="button" :disabled="countdown > 0 || sending" @click="handleSendCode" class="mt-7 rounded-2xl border border-gold/35 px-4 py-3 text-sm font-bold text-gold disabled:border-white/10 disabled:text-slate-500">{{ sending ? '发送中' : countdown > 0 ? `${countdown}秒后重试` : '获取验证码' }}</button>
+      <button type="button" :disabled="countdown > 0 || sending" @click="handleSendCode" class="mt-7 rounded-2xl border border-gold/35 px-4 py-3 text-sm font-bold text-slate-700 disabled:border-slate-200/80 disabled:text-slate-500">{{ sending ? '发送中' : countdown > 0 ? `${countdown}秒后重试` : '获取验证码' }}</button>
     </div>
 
-    <p v-if="debugCode" class="mt-4 text-sm text-slate-400">开发验证码：{{ debugCode }}</p>
-    <p v-if="error" class="mt-4 text-sm text-red-300" role="alert">{{ error }}</p>
-    <button type="submit" :disabled="submitting" class="mt-7 w-full rounded-full bg-gold px-5 py-3 text-sm font-black text-ink shadow-glow disabled:opacity-60">{{ submitting ? '处理中' : mode === 'login' ? '登录用户中心' : '完成注册' }}</button>
-    <button type="button" class="mt-4 w-full rounded-full border border-white/15 px-5 py-3 text-sm font-bold text-white">微信小程序登录</button>
+    <p v-if="debugCode" class="mt-4 text-sm text-slate-500">开发验证码：{{ debugCode }}</p>
+    <p v-if="error" class="mt-4 text-sm text-slate-700" role="alert">{{ error }}</p>
+    <button type="submit" :disabled="submitting" class="mt-7 w-full rounded-full bg-gold px-5 py-3 text-sm font-black text-white shadow-glow disabled:opacity-60">{{ submitting ? '处理中' : mode === 'login' ? '登录用户中心' : '完成注册' }}</button>
+    <button type="button" class="mt-4 w-full rounded-full border border-slate-200 px-5 py-3 text-sm font-bold text-slate-950">微信小程序登录</button>
   </form>
 </template>
 
@@ -53,10 +53,10 @@ const debugCode = ref('')
 const sending = ref(false)
 const submitting = ref(false)
 let timer: number | undefined
-const activeTab = 'flex-1 rounded-full px-4 py-2 text-sm font-bold bg-gold text-ink'
-const inactiveTab = 'flex-1 rounded-full px-4 py-2 text-sm font-bold text-slate-300'
-const activeSmallTab = 'flex-1 rounded-full px-3 py-1.5 text-xs font-bold bg-white/15 text-white'
-const inactiveSmallTab = 'flex-1 rounded-full px-3 py-1.5 text-xs font-bold text-slate-400'
+const activeTab = 'flex-1 rounded-full px-4 py-2 text-sm font-bold bg-gold text-white'
+const inactiveTab = 'flex-1 rounded-full px-4 py-2 text-sm font-bold text-slate-600'
+const activeSmallTab = 'flex-1 rounded-full px-3 py-1.5 text-xs font-bold bg-white/15 text-slate-950'
+const inactiveSmallTab = 'flex-1 rounded-full px-3 py-1.5 text-xs font-bold text-slate-500'
 
 function tick() { window.clearTimeout(timer); if (countdown.value <= 0) return; timer = window.setTimeout(() => { countdown.value -= 1; tick() }, 1000) }
 onUnmounted(() => window.clearTimeout(timer))

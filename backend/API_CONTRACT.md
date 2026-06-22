@@ -235,24 +235,26 @@ backend/app/repositories/job_repository.py
 ```text
 GET  /api/jobs
 POST /api/jobs
+POST /api/jobs/{job_id}/upload
 POST /api/jobs/{job_id}/run
+GET  /api/jobs/{job_id}/status
 GET  /api/jobs/{job_id}/results
+POST /api/jobs/{job_id}/review
 ```
 
-需要完善：
+当前状态：已接入 MySQL。支持创建任务、上传文件、后台运行检测、轮询状态、查询结果和申请人工复核。
 
-- 创建真实任务记录
-- 查询用户任务列表
-- 任务状态流转
-- 任务进入检测队列
-- 查询任务检测结果
+后续可继续完善：
+
+- 删除任务接口
+- 更完整的资料完整性校验
+- 独立任务队列/Celery/RQ
+- 任务运行失败原因字段
 
 建议后续新增接口：
 
 ```text
-GET    /api/jobs/{job_id}/status
 DELETE /api/jobs/{job_id}
-POST   /api/jobs/{job_id}/review
 ```
 
 ---
@@ -275,11 +277,10 @@ POST /api/jobs/{job_id}/upload
 
 需要完善：
 
-- 保存上传文件
-- 校验文件类型
-- 校验文件大小
-- 返回真实文件 URL
-- 把文件 URL 绑定到任务
+- OSS/S3 对象存储
+- 生成缩略图
+- 文件病毒扫描
+- 定期清理孤儿文件
 
 建议限制：
 
@@ -310,13 +311,14 @@ GET /api/jobs/{job_id}/results
 GET /api/jobs/{job_id}/report/pdf
 ```
 
+当前状态：已接入 MySQL 报告持久化。报告生成支持后台调用大模型，管理员可配置 `provider=openai/anthropic`、模型名、Base URL、API Key、temperature、max tokens；模型调用失败时会生成 fallback 报告，保证任务链路可用。
+
 需要完善：
 
-- 查询真实报告列表
-- 查询真实报告详情
-- 生成真实检测结果
 - 生成真实 PDF
 - 支持中文字体和图片证据
+- 报告导出模板美化
+- 模型调用失败原因前端可见
 
 ---
 
@@ -333,23 +335,26 @@ backend/app/repositories/admin_repository.py
 负责接口：
 
 ```text
-GET /api/admin/jobs
+GET   /api/admin/jobs
+PATCH /api/admin/jobs/{job_id}/review
+GET   /api/admin/model-config
+PUT   /api/admin/model-config
 ```
+
+当前状态：已接入管理员权限校验、后台统计、任务列表、人工复核处理和大模型配置。
 
 需要完善：
 
-- 管理员权限校验
-- 真实统计数据
-- 管理员任务列表
 - 搜索、筛选、分页
-- 人工复核状态
+- 管理员用户列表
+- 复核处理历史
+- 模型配置测试连接接口
 
 建议后续新增接口：
 
 ```text
-GET   /api/admin/users
-PATCH /api/admin/jobs/{job_id}
-POST  /api/admin/jobs/{job_id}/review
+GET  /api/admin/users
+POST /api/admin/model-config/test
 ```
 
 ---
@@ -410,14 +415,16 @@ frontend/src/types/domain.ts
 
 ## 1. DetectionFormInput：检测任务创建参数
 
+简化前端只要求用户提供文本或图片之一，其他字段可以为空，由后端和大模型自动判断风险方向。
+
 ```json
 {
-  "detectionType": "trademark",
-  "brand": "ACTIVEWEAR",
-  "category": "shoes",
-  "market": "US",
+  "detectionType": "",
+  "brand": "",
+  "category": "",
+  "market": "",
   "productLink": "https://example.com/product",
-  "title": "商品标题或卖点文案",
+  "title": "商品标题、详情页文案，或用户担心侵权的描述",
   "hasFile": true,
   "file": {
     "name": "product.png",
@@ -431,12 +438,16 @@ frontend/src/types/domain.ts
 
 | 字段 | 类型 | 说明 |
 |---|---|---|
-| detectionType | string | `trademark`、`design`、`copyright` |
-| brand | string | 品牌名 |
-| category | string | 商品类目 |
-| market | string | 目标市场 |
-| productLink | string | 商品链接 |
-| title | string | 商品标题或描述 |
+| detectionType | string | 可为空；高级客户端可传 `trademark`、`design`、`copyright` |
+| brand | string | 可为空；后端会自动归一化为待识别品牌 |
+| category | string | 可为空；后端会自动归一化为 auto |
+| market | string | 可为空；后端会自动归一化为 global |
+| productLink | string | 兼容字段，简化前端默认传空 |
+| title | string | 可选，商品标题、描述、详情页文案或用户担心的侵权点 |
+| hasFile | boolean | 是否有图片文件 |
+| file | object | 可选，前端本地文件信息 |
+
+提交要求：`title` 或图片文件至少提供一个。
 | hasFile | boolean | 是否上传文件 |
 | file | object/null | 文件信息 |
 
@@ -908,22 +919,33 @@ backend/app/services/job_service.py
 backend/app/repositories/job_repository.py
 ```
 
-当前状态：mock，只生成任务 ID。
+当前状态：已可用。创建 MySQL 任务记录并绑定当前用户。前端已改为傻瓜式提交，用户只需提供商品描述、商品链接或图片之一；`detectionType`、`brand`、`category`、`market` 可为空，后端会自动归一化并由模型判断风险方向。
 
 请求：
 
 ```json
 {
-  "detectionType": "trademark",
-  "brand": "NORTHBIRD",
-  "category": "apparel",
-  "market": "UK",
-  "productLink": "https://example.com/product",
-  "title": "商品标题",
-  "hasFile": false,
-  "file": null
+  "detectionType": "",
+  "brand": "",
+  "category": "",
+  "market": "",
+  "productLink": "",
+  "title": "粘贴商品标题、详情页文案，或直接描述担心侵权的内容",
+  "hasFile": true,
+  "file": {
+    "name": "product.png",
+    "type": "image/png",
+    "size": 102400
+  }
 }
 ```
+
+兼容说明：
+
+- `detectionType`、`brand`、`category`、`market` 仍可由高级客户端传入。
+- 简化前端可以传空字符串。
+- 后端会把空品牌归一化为 `待识别品牌`，空类目为 `auto`，空市场为 `global`。
+- 至少应提供 `title`、`productLink` 或上传文件之一。
 
 返回：
 
@@ -943,12 +965,11 @@ backend/app/repositories/job_repository.py
 }
 ```
 
-需要完善：
+后续可继续完善：
 
-- 创建数据库任务记录
-- 绑定当前用户
-- 初始化任务状态
-- 返回真实任务 ID
+- 任务失败原因字段
+- 重复提交去重
+- 更完整的输入内容安全校验
 
 前端依赖字段：
 
@@ -1029,7 +1050,7 @@ backend/app/services/job_service.py
 backend/app/repositories/job_repository.py
 ```
 
-当前状态：占位，只返回 queued。
+当前状态：已可用。返回 queued，并通过 FastAPI BackgroundTasks 后台处理任务；任务会进入 `processing`，模型报告生成成功后更新为 `done`，异常时更新为 `failed`。
 
 返回：
 
@@ -1040,13 +1061,12 @@ backend/app/repositories/job_repository.py
 }
 ```
 
-需要完善：
+后续可继续完善：
 
-- 检查任务是否存在
-- 检查任务是否属于当前用户
 - 检查资料是否完整
-- 推送任务到检测队列
-- 更新任务状态
+- 使用独立任务队列
+- 记录任务失败原因
+- 支持重试失败任务
 
 前端依赖字段：
 
@@ -1069,7 +1089,7 @@ backend/app/services/report_service.py
 backend/app/repositories/report_repository.py
 ```
 
-当前状态：mock。
+当前状态：已可用。按当前登录用户和任务归属查询 MySQL 中的检测报告；返回大模型生成内容或 fallback 报告。
 
 返回：
 
@@ -1123,7 +1143,7 @@ backend/app/services/report_service.py
 backend/app/repositories/report_repository.py
 ```
 
-当前状态：mock。
+当前状态：已可用。按当前登录用户查询 MySQL 中的报告列表。
 
 返回：
 
@@ -1144,9 +1164,8 @@ backend/app/repositories/report_repository.py
 ]
 ```
 
-需要完善：
+后续可继续完善：
 
-- 根据当前用户查询报告
 - 支持分页、搜索、风险等级筛选
 
 前端当前期望直接返回数组 `DetectionReport[]`。
@@ -1165,7 +1184,7 @@ backend/app/services/report_service.py
 backend/app/repositories/report_repository.py
 ```
 
-当前状态：mock。
+当前状态：已可用。按报告 ID 查询 MySQL 报告详情，并校验当前用户只能查看自己的报告。
 
 返回：
 
@@ -1184,11 +1203,10 @@ backend/app/repositories/report_repository.py
 }
 ```
 
-需要完善：
+后续可继续完善：
 
-- 根据数据库报告 ID 查询
-- 校验查看权限
-- 返回真实报告内容
+- 报告详情访问审计
+- 报告版本记录
 
 ---
 
@@ -1372,10 +1390,10 @@ rejected
 | 认证 | `POST /api/auth/register` | 手机号 + 验证码 + 密码注册可用 | 可选 | `auth_service.py` |
 | 认证 | `GET /api/auth/me` | Bearer token 当前用户可用 | 可选 | `auth.py`, `security.py` |
 | 认证 | `POST /api/auth/logout` | 可用 | 可选 | `auth_service.py` |
-| 任务 | `GET /api/jobs` | mock | 是 | `job_service.py` |
-| 任务 | `POST /api/jobs` | mock | 是 | `job_service.py` |
-| 文件 | `POST /api/jobs/{job_id}/upload` | 占位 | 是 | `file_service.py` |
-| 任务 | `POST /api/jobs/{job_id}/run` | 占位 | 是 | `job_service.py` |
+| 任务 | `GET /api/jobs` | 已接入 MySQL 任务列表 | 可选 | `job_service.py`, `job_repository.py` |
+| 任务 | `POST /api/jobs` | 已接入 MySQL 任务创建 | 可选 | `job_service.py`, `job_repository.py` |
+| 文件 | `POST /api/jobs/{job_id}/upload` | 已支持本地上传和静态访问 | 可选 | `jobs.py`, `job_repository.py` |
+| 任务 | `POST /api/jobs/{job_id}/run` | 已支持后台运行和状态流转 | 可选 | `job_service.py`, `report_service.py` |
 | 结果 | `GET /api/jobs/{job_id}/results` | 已接入 MySQL 报告和复核状态 | 可选 | `report_service.py` |
 | 报告 | `GET /api/reports` | 已接入 MySQL 报告列表 | 可选 | `report_service.py` |
 | 报告 | `GET /api/reports/{report_id}` | 已接入 MySQL 报告详情 | 可选 | `report_service.py` |
@@ -1471,11 +1489,11 @@ token 刷新或黑名单
 
 ```text
 backend/app/services/job_service.py
-backend/app/services/file_service.py
 backend/app/repositories/job_repository.py
+backend/app/routers/jobs.py
 ```
 
-需要完成：
+已完成：
 
 ```text
 创建任务
@@ -1483,6 +1501,15 @@ backend/app/repositories/job_repository.py
 任务列表
 任务运行
 任务状态
+人工复核申请
+```
+
+后续可继续完善：
+
+```text
+删除任务
+失败任务重试
+独立任务队列
 ```
 
 ---
@@ -1494,15 +1521,27 @@ backend/app/repositories/job_repository.py
 ```text
 backend/app/services/report_service.py
 backend/app/repositories/report_repository.py
+backend/app/repositories/model_config_repository.py
 ```
 
-需要完成：
+已完成：
 
 ```text
-检测结果
+大模型报告生成
+OpenAI 兼容协议
+Anthropic Messages 协议
+模型调用 fallback
 报告列表
 报告详情
+结果页状态展示
+```
+
+后续可继续完善：
+
+```text
 PDF 下载
+模型配置测试连接
+模型调用失败原因持久化
 ```
 
 ---
@@ -1514,16 +1553,26 @@ PDF 下载
 ```text
 backend/app/services/admin_service.py
 backend/app/repositories/admin_repository.py
+backend/app/repositories/model_config_repository.py
 ```
 
-需要完成：
+已完成：
 
 ```text
 管理员权限
 后台统计
 任务管理
-用户管理
 人工复核
+大模型配置
+通知发送
+```
+
+后续可继续完善：
+
+```text
+用户管理
+搜索筛选分页
+复核处理历史
 ```
 
 ---
@@ -1574,11 +1623,11 @@ npm run dev
 
 # 十四、给合作者的结论
 
-1. 当前后端接口文件和协作文件已经预留好，认证模块已接入真实 MySQL、短信验证码、密码登录和 token。
+1. 当前后端接口文件和协作文件已经预留好，认证、任务、上传、报告、通知、管理后台复核和大模型配置已接入真实 MySQL。
 2. `routers/` 负责接口入口。
 3. `services/` 负责业务逻辑。
 4. `repositories/` 负责数据库访问。
 5. `db/` 负责数据库连接和 ORM 基础。
 6. `core/` 负责配置、安全、token、密码哈希、权限。
-7. 任务、报告、管理后台接口仍以 mock/占位为主，是下一阶段重点。
-8. 后续只要接口路径和返回字段保持一致，前端不需要改。
+7. 当前重点剩余功能是 PDF 真实生成、管理员用户管理、搜索筛选分页、任务队列和模型配置测试连接。
+8. 后续只要接口路径和返回字段保持一致，前端不需要大改。

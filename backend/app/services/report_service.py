@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -25,62 +26,87 @@ def _risk_level(score: int) -> str:
 
 
 def _demo_score(job: Job) -> int:
-    base = 45 + (len(job.brand) * 7 + len(job.market) * 3) % 45
-    return min(base, 92)
+    seed = '|'.join([
+        job.title or '',
+        job.brand or '',
+        job.category or '',
+        job.market or '',
+        job.product_link or '',
+        ','.join(file.filename for file in job.files),
+    ])
+    digest = hashlib.sha256(seed.encode('utf-8')).hexdigest()
+    return 38 + (int(digest[:8], 16) % 55)
+
+
+def _category_scores_from_product(job: Job, score: int):
+    text = f'{job.title} {job.brand} {job.category}'.lower()
+    trademark_bias = 12 if any(token in text for token in ('logo', '品牌', '商标', '联名', '同款')) else 0
+    design_bias = 14 if any(token in text for token in ('外观', '造型', '包装', '鞋', '包', '玩具', '饰品')) else 0
+    copyright_bias = 14 if any(token in text for token in ('图片', '图案', '文案', '角色', '素材', '海报')) else 0
+    return [
+        {'type': 'trademark', 'label': '商标近似', 'score': min(score + trademark_bias, 100), 'hits': 1 if score + trademark_bias >= 55 else 0},
+        {'type': 'design', 'label': '外观相似', 'score': min(max(score - 8 + design_bias, 0), 100), 'hits': 1 if score - 8 + design_bias >= 55 else 0},
+        {'type': 'copyright', 'label': '版权素材', 'score': min(max(score - 16 + copyright_bias, 0), 100), 'hits': 1 if score - 16 + copyright_bias >= 55 else 0},
+    ]
 
 
 def _fallback_report_payload(job: Job):
     score = _demo_score(job)
     risk_level = _risk_level(score)
-    brand = job.brand.upper() or 'DRAFT BRAND'
-    image_url = job.files[0].file_url if job.files else '/evidence/activewear.svg'
+    product_name = job.title.strip() or job.brand.strip() or '当前商品'
+    category = job.category if job.category and job.category != 'auto' else '未明确类目'
+    market = job.market if job.market and job.market != 'global' else '目标市场'
     return {
         'id': f'r-{job.id}',
         'jobId': job.id,
-        'title': f'{brand} 知识产权风险预检报告',
+        'title': f'{product_name} 上架风险预检报告',
         'riskLevel': risk_level,
         'riskScore': score,
-        'summary': f'{brand} 在 {job.market} 市场的 {job.category} 类目存在{risk_level}级知识产权风险，当前报告为模型调用失败后的降级结果。',
-        'categoryScores': [
-            {'type': 'trademark', 'label': '商标', 'score': min(score + 5, 100), 'hits': 2 if score >= 60 else 1},
-            {'type': 'design', 'label': '外观', 'score': max(score - 8, 0), 'hits': 1},
-            {'type': 'copyright', 'label': '版权', 'score': max(score - 18, 0), 'hits': 0 if score < 75 else 1},
+        'summary': f'本次资料围绕“{product_name}”进行预检，当前可识别类目为{category}，面向{market}。系统根据商品描述、上传资料和默认检测方向生成降级判断；建议在正式上架前重点确认分项风险较高的内容。',
+        'categoryScores': _category_scores_from_product(job, score),
+        'evidence': [],
+        'suggestions': [
+            f'先核对“{product_name}”中出现的品牌词、Logo 或联名表达，避免让买家误以为与他人品牌有关。',
+            f'如果商品图片或包装造型是核心卖点，建议把{category}同类热销商品和目标市场公开外观记录做一次人工比对。',
+            '详情页图片、图案和文案尽量使用自有素材；来源不清的素材先替换或补充授权证明。',
         ],
-        'evidence': [
-            {
-                'id': f'ev-{job.id}',
-                'category': job.type,
-                'matched': brand,
-                'source': 'Fallback IP Index',
-                'similarity': round(score / 100, 2),
-                'description': '模型调用失败时使用的降级报告，用于保证业务链路可用。',
-                'imageUrl': image_url,
-            }
-        ],
-        'suggestions': ['检查模型配置和 API Key。', '确认模型服务可访问。', '必要时重新运行检测任务。'],
     }
 
 
 def _format_prompt(job: Job) -> str:
-    return f'''你是跨境知识产权风险分析助手，请根据以下任务生成结构化 JSON 报告。
+    files = ', '.join(f'{file.filename} ({file.content_type or "unknown"}, {file.size} bytes)' for file in job.files) or '未上传图片'
+    product_text = job.title.strip() or '用户未填写文字描述'
+    product_link = job.product_link.strip() or '未提供'
+    brand = job.brand.strip() or '未明确品牌'
+    category = job.category.strip() or '未明确类目'
+    market = job.market.strip() or '未明确市场'
+    return f'''你是跨境电商上架前的知识产权风险预检助手。你的目标不是写模板报告，而是根据用户提交的具体商品资料，生成一份有差异、有判断、有下一步建议的 JSON 报告。
 
 要求：
 - 只返回 JSON，不要 Markdown，不要代码块，不要额外解释。
 - JSON 必须包含字段：title, riskLevel, riskScore, summary, categoryScores, evidence, suggestions。
-- categoryScores 为数组，每项包含 type, label, score, hits。
-- evidence 为数组，每项包含 id, category, matched, source, similarity, description, imageUrl。
+- title 必须包含具体商品名称或用户描述中的核心词，不要只写“知识产权风险报告”。
+- summary 必须点名本次商品的关键元素，例如品牌词、Logo、图案、包装、外观、文案、使用场景或目标市场；不要写任何可以套用到所有商品的泛泛结论。
+- categoryScores 必须恰好返回 3 项：商标近似、外观相似、版权素材。每项包含 type, label, score, hits；type 只能是 trademark / design / copyright。
+- 每个分项分数必须根据商品资料差异化判断：品牌/Logo/联名表达影响商标；造型/包装/结构影响外观；图片/图案/角色/文案/素材来源影响版权。
+- evidence 字段保留为兼容字段，但请返回空数组 []，不要编造命中证据。
 - riskLevel 只能是 high / medium / low。
-- riskScore 0-100 的整数。
-- suggestions 至少 3 条。
+- riskScore 是 0-100 的整数，并且要和三个分项风险一致：整体高风险时至少一个分项应明显偏高。
+- suggestions 返回 3-5 条，每条都必须针对本商品资料写下一步动作；不要出现“咨询专业人士”这类空泛建议，除非已经说明要核对什么资料。
+- 如果用户只上传图片、文字很少，请明确说明“当前主要依据上传图片/文件名判断”，并把建议集中在图片可见元素、包装、Logo、图案和素材来源上。
+- 如果资料不足，不要假装已经查到确切数据库命中；可以给低/中风险预检结论，并建议补充具体信息。
 
-任务信息：
+用户提交内容：
 - 任务ID: {job.id}
-- 品牌: {job.brand}
-- 类目: {job.category}
-- 市场: {job.market}
-- 检测类型: {job.type}
-- 标题: {job.title}
-- 商品链接: {job.product_link}
+- 用户文本/标题/描述: {product_text}
+- 商品链接: {product_link}
+- 上传图片/文件: {files}
+
+后端兼容字段：
+- 品牌: {brand}
+- 类目: {category}
+- 市场: {market}
+- 默认检测类型: {job.type}
 '''
 
 
@@ -122,17 +148,7 @@ def _build_report_payload(job: Job, data: dict[str, Any]):
     title = data.get('title') or f'{job.brand.upper()} 知识产权风险预检报告'
     summary = data.get('summary') or f'{job.brand} 在 {job.market} 市场的 {job.category} 类目存在{risk_level}级知识产权风险。'
     category_scores = data.get('categoryScores') or []
-    evidence = data.get('evidence') or [
-        {
-            'id': 'model-no-hit',
-            'category': job.type,
-            'matched': '',
-            'source': 'model',
-            'similarity': 0,
-            'description': '模型未返回直接命中证据。',
-            'imageUrl': job.files[0].file_url if job.files else '',
-        }
-    ]
+    evidence = data.get('evidence') or []
     suggestions = data.get('suggestions') or []
     if not category_scores:
         raise ValueError('model response missing categoryScores')

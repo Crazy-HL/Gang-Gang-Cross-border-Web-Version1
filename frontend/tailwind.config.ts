@@ -5,17 +5,17 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        ink: '#090B10',
-        'ink-2': '#111827',
-        panel: '#141A24',
-        'panel-2': '#1E2633',
-        gold: '#FBBF24',
+        ink: '#F8FAFC',
+        'ink-2': '#F1F5F9',
+        panel: '#FFFFFF',
+        'panel-2': '#E2E8F0',
+        gold: '#3B82F6',
         ember: '#F97316',
-        danger: '#EF4444',
-        success: '#22C55E'
+        danger: '#FFEDD5',
+        success: '#DBEAFE'
       },
       boxShadow: {
-        glow: '0 0 40px rgba(251, 191, 36, 0.18)'
+        glow: '0 18px 45px rgba(59, 130, 246, 0.18)'
       }
     }
   },

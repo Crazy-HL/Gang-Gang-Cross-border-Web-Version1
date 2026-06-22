@@ -23,7 +23,8 @@ def _safe_slug(value: str) -> str:
 
 def _generate_job_id(input_data: DetectionFormInput) -> str:
     timestamp = datetime.now().strftime('%Y%m%d%H%M%S%f')
-    return f'job-{timestamp}-{_safe_slug(input_data.brand)}'
+    label = input_data.brand or input_data.title or input_data.productLink or 'auto'
+    return f'job-{timestamp}-{_safe_slug(label)}'
 
 
 def list_user_jobs(db: Session, user: User):

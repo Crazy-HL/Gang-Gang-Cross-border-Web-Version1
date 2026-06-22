@@ -5,5 +5,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 const props = defineProps<{ href: string; variant?: 'primary' | 'secondary' }>()
-const classes = computed(() => props.variant === 'secondary' ? 'rounded-full border border-white/15 px-6 py-3 text-sm font-bold text-white transition hover:border-gold hover:text-gold' : 'rounded-full bg-gold px-6 py-3 text-sm font-black text-ink shadow-glow transition hover:bg-amber-300')
+const classes = computed(() =>
+  props.variant === 'secondary'
+    ? 'rounded-full border border-slate-200 bg-white px-6 py-3 text-sm font-bold text-slate-950 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-700'
+    : 'rounded-full bg-gold px-6 py-3 text-sm font-black text-white shadow-glow transition hover:bg-blue-600'
+)
 </script>

@@ -1,5 +1,30 @@
-<template><section class="px-5 py-16 lg:px-8"><SectionHeading eyebrow="FAQ" title="上线前常见问题" /><div class="mx-auto mt-12 max-w-4xl divide-y divide-white/10 rounded-3xl border border-white/10 bg-panel/70"><div v-for="[q, a] in faqs" :key="q" class="p-6"><h3 class="font-bold text-white">{{ q }}</h3><p class="mt-2 text-sm leading-6 text-slate-400">{{ a }}</p></div></div></section></template>
+<template>
+  <section class="bg-white px-5 py-20 lg:px-8">
+    <SectionHeading
+      eyebrow="常见问题"
+      title="第一次用，也不用准备太多"
+      description="能发什么、能得到什么，先说清楚。"
+    />
+
+    <div class="mx-auto mt-12 grid max-w-5xl gap-4">
+      <article
+        v-for="[question, answer] in faqs"
+        :key="question"
+        class="rounded-[1.5rem] border border-slate-200/80 bg-white p-6 shadow-sm shadow-blue-900/5"
+      >
+        <h3 class="text-lg font-bold text-slate-950">{{ question }}</h3>
+        <p class="mt-2 text-sm leading-6 text-slate-500">{{ answer }}</p>
+      </article>
+    </div>
+  </section>
+</template>
+
 <script setup lang="ts">
 import SectionHeading from '@/components/ui/SectionHeading.vue'
-const faqs = [['适合哪些团队？', '适合跨境卖家、品牌方、工厂和代运营团队在选品、上架、投放前做风险预检。'], ['是否替代律师意见？', '系统提供风险线索和证据整理，不替代正式法律意见；高风险任务建议提交人工复核。'], ['没有后端能运行吗？', '当前版本由 FastAPI 后端提供 mock 数据，可本地演示并等待真实接口接入。']]
+
+const faqs = [
+  ['我不懂商标版权，可以用吗？', '可以。你只要把商品资料发来，我们帮你看重点风险。'],
+  ['需要发什么资料？', '商品图、包装图、Logo、标题、详情文案都可以。'],
+  ['看完后能得到什么？', '你会知道哪里可能有问题，以及上架前建议先处理什么。']
+]
 </script>

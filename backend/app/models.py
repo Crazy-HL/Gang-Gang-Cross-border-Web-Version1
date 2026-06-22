@@ -20,13 +20,13 @@ class FileInfo(BaseModel):
 
 
 class DetectionFormInput(BaseModel):
-    detectionType: DetectionType | Literal['']
-    brand: str
-    category: str
-    market: str
-    productLink: str
-    title: str
-    hasFile: bool
+    detectionType: DetectionType | Literal[''] = ''
+    brand: str = ''
+    category: str = ''
+    market: str = ''
+    productLink: str = ''
+    title: str = ''
+    hasFile: bool = False
     file: FileInfo | None = None
 
 

@@ -37,15 +37,16 @@ def get_job(db: Session, job_id: str) -> Job | None:
 
 
 def create_job(db: Session, job_id: str, input_data: DetectionFormInput, owner_id: int | None = None) -> Job:
+    title = input_data.title.strip() or input_data.productLink.strip() or '自动知识产权风险检测'
     job = Job(
         id=job_id,
         owner_id=owner_id,
         type=input_data.detectionType or 'trademark',
-        title=input_data.title or f'{input_data.brand} 知识产权风险检测',
-        brand=input_data.brand,
-        category=input_data.category,
-        market=input_data.market,
-        product_link=input_data.productLink,
+        title=title,
+        brand=input_data.brand.strip() or '待识别品牌',
+        category=input_data.category.strip() or 'auto',
+        market=input_data.market.strip() or 'global',
+        product_link=input_data.productLink.strip(),
         status='queued',
         risk_level='pending',
         risk_score=None,
