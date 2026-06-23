@@ -130,7 +130,3 @@ export async function downloadReportPdf(jobId: string) {
     filename: filenameFromDisposition(response.headers.get('content-disposition'), `ip-report-${jobId}.pdf`)
   }
 }
-
-export function downloadReportUrl(jobId: string) {
-  return `${API_BASE_URL}/api/jobs/${encodeURIComponent(jobId)}/report/pdf`
-}

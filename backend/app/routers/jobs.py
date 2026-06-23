@@ -6,6 +6,7 @@ from app.db.base import User
 from app.db.session import DbSession
 from app.models import DetectionFormInput, ReviewRequest
 from app.services import file_service, job_service, report_service
+from app.services.pdf_service import build_report_pdf
 
 router = APIRouter(prefix='/api/jobs', tags=['jobs'])
 
@@ -69,23 +70,9 @@ def download_report_pdf(job_id: str, db: DbSession, user: User = Depends(get_cur
     job = job_service.get_user_job(db, job_id, user)
     if not job:
         raise HTTPException(status_code=404, detail='Job not found')
-    body = f"""%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R >>
-endobj
-4 0 obj
-<< /Length 76 >>
-stream
-BT /F1 16 Tf 72 720 Td (Gang Gang Cross-border IP Report {job_id}) Tj ET
-endstream
-endobj
-trailer
-<< /Root 1 0 R /Size 5 >>
-%%EOF"""
-    return Response(content=body, media_type='application/pdf', headers={'content-disposition': f'attachment; filename="ip-report-{job_id}.pdf"'})
+    report = report_service.get_user_job_results(db, job)
+    if not report:
+        raise HTTPException(status_code=404, detail='Report not found')
+    body = build_report_pdf(report)
+    filename = f'ip-report-{job_id}.pdf'
+    return Response(content=body, media_type='application/pdf', headers={'content-disposition': f'attachment; filename="{filename}"'})
