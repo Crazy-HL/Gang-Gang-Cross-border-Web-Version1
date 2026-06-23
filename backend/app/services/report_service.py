@@ -153,6 +153,12 @@ def _uspto_hit_score(hit: dict[str, Any]) -> int:
     return min(score, 96)
 
 
+def _uspto_evidence_id(job: Job, suffix: str | int) -> str:
+    job_hash = hashlib.sha1(job.id.encode('utf-8')).hexdigest()[:12]
+    clean_suffix = re.sub(r'[^a-zA-Z0-9_-]+', '-', str(suffix)).strip('-') or 'item'
+    return f'uspto-{job_hash}-{clean_suffix}'[:64]
+
+
 def _build_uspto_report_payload(job: Job, result: dict[str, Any], min_similarity: float) -> dict[str, Any] | None:
     hits = result.get('hits') or []
     relevant_hits = [hit for hit in hits if float(hit.get('similarity') or 0) >= min_similarity]
@@ -193,7 +199,7 @@ def _build_uspto_report_payload(job: Job, result: dict[str, Any], min_similarity
         ],
         'evidence': [
             {
-                'id': f'uspto-{hit["serialNumber"] or index}',
+                'id': _uspto_evidence_id(job, hit["serialNumber"] or index),
                 'category': 'trademark',
                 'matched': hit['wordmark'],
                 'source': USPTO_SOURCE_NAME,
@@ -225,7 +231,7 @@ def _build_uspto_no_hit_evidence(job: Job, result: dict[str, Any], min_similarit
     ]
     weak_text = f' USPTO 返回的弱相关记录包括：{"、".join(weak_hits)}。' if weak_hits else ''
     return {
-        'id': f'uspto-no-hit-{job.id}',
+        'id': _uspto_evidence_id(job, 'no-hit'),
         'category': 'trademark',
         'matched': f'{query}（未发现明确命中）',
         'source': USPTO_SOURCE_NAME,
