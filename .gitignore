@@ -4,6 +4,7 @@ dist/
 coverage/
 *.log
 *.tsbuildinfo
+.DS_Store
 .env
 .env.*
 __pycache__/
@@ -17,4 +18,7 @@ frontend/dist/
 frontend/.vite/
 backend/.venv/
 backend/uploads/
+.migration-backups/
 .claude/
+.superpowers/
+remotion-promo/out/
