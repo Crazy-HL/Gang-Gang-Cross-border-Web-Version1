@@ -47,10 +47,10 @@
 
     <div v-else-if="overview" class="space-y-4">
       <div
-        v-if="error"
+        v-if="warning"
         class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"
       >
-        {{ error }}
+        {{ warning }}
       </div>
       <AdminDashboard
         :overview="overview"
@@ -96,15 +96,30 @@ const serviceRequests = ref<AdminServiceRequestRow[]>([])
 const notifications = ref<AdminNotificationRow[]>([])
 const loading = ref(true)
 const error = ref('')
+const warning = ref('')
 const forbidden = ref(false)
+
+function resetAdminData() {
+  overview.value = null
+  jobs.value = []
+  users.value = []
+  reports.value = []
+  serviceRequests.value = []
+  notifications.value = []
+}
+
+function isForbiddenReason(reason: unknown) {
+  return reason instanceof ApiError && reason.status === 403
+}
 
 async function loadAdminConsole() {
   loading.value = true
   error.value = ''
+  warning.value = ''
   forbidden.value = false
   try {
-    const [overviewData, jobsData, usersData, reportsData, serviceRequestsData, notificationsData] =
-      await Promise.all([
+    const [overviewResult, jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult] =
+      await Promise.allSettled([
         getAdminOverview(),
         getAdminJobs(),
         getAdminUsers(),
@@ -113,25 +128,32 @@ async function loadAdminConsole() {
         getAdminNotifications(),
       ])
 
-    overview.value = overviewData
-    jobs.value = jobsData.jobs
-    users.value = usersData
-    reports.value = reportsData
-    serviceRequests.value = serviceRequestsData
-    notifications.value = notificationsData
-  } catch (err) {
-    if (err instanceof ApiError && err.status === 403) {
-      overview.value = null
-      jobs.value = []
-      users.value = []
-      reports.value = []
-      serviceRequests.value = []
-      notifications.value = []
+    const results = [overviewResult, jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult]
+    if (results.some((result) => result.status === 'rejected' && isForbiddenReason(result.reason))) {
+      resetAdminData()
       forbidden.value = true
       error.value = '当前账号没有管理员权限，无法查看后台数据'
       return
     }
 
+    if (overviewResult.status === 'rejected') {
+      resetAdminData()
+      error.value = '管理员后台数据加载失败，请稍后重试'
+      return
+    }
+
+    overview.value = overviewResult.value
+    jobs.value = jobsResult.status === 'fulfilled' ? jobsResult.value.jobs : []
+    users.value = usersResult.status === 'fulfilled' ? usersResult.value : []
+    reports.value = reportsResult.status === 'fulfilled' ? reportsResult.value : []
+    serviceRequests.value = serviceRequestsResult.status === 'fulfilled' ? serviceRequestsResult.value : []
+    notifications.value = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
+
+    if ([jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult].some((result) => result.status === 'rejected')) {
+      warning.value = '部分后台数据加载失败，已展示可用内容。'
+    }
+  } catch {
+    resetAdminData()
     error.value = '管理员后台数据加载失败，请稍后重试'
   } finally {
     loading.value = false

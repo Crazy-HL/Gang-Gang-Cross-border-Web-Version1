@@ -5,7 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db.base import Base, Job, Notification, Report, ServiceRequest, User
-from app.services import admin_service
+from app.services import admin_service, report_service
 
 
 class AdminServiceTests(unittest.TestCase):
@@ -52,7 +52,37 @@ class AdminServiceTests(unittest.TestCase):
             contact='13800138000',
             reference='ASIN-TEST',
             description='测试服务需求',
-            details_json=json.dumps({'adviceReport': {'title': '建议报告'}}, ensure_ascii=False),
+            details_json=json.dumps({
+                'adviceReport': {
+                    'title': '申诉建议报告',
+                    'summary': '建议先补充授权材料',
+                    'riskLevel': 'medium',
+                    'sections': [{'title': '优先动作', 'items': ['准备发票']}],
+                    'nextActions': ['联系平台客服'],
+                    'source': 'model',
+                }
+            }, ensure_ascii=False),
+        )
+        self.tro_service_request = ServiceRequest(
+            id='TRO-ADMIN-1',
+            owner_id=self.normal.id,
+            request_type='tro_settlement',
+            title='TRO 和解咨询',
+            platform='Shopify',
+            status='processing',
+            contact='13800138000',
+            reference='CASE-TEST',
+            description='测试 TRO 服务需求',
+            details_json=json.dumps({
+                'adviceReport': {
+                    'title': 'TRO 和解建议报告',
+                    'summary': '建议先核对冻结金额',
+                    'riskLevel': 'low',
+                    'sections': [{'title': '基础核查', 'items': ['确认案号']}],
+                    'nextActions': ['准备和解预算'],
+                    'source': 'fallback',
+                }
+            }, ensure_ascii=False),
         )
         self.notification = Notification(
             user_id=self.normal.id,
@@ -61,7 +91,7 @@ class AdminServiceTests(unittest.TestCase):
             type='report',
             is_read=False,
         )
-        self.db.add_all([self.job, self.report, self.service_request, self.notification])
+        self.db.add_all([self.job, self.report, self.service_request, self.tro_service_request, self.notification])
         self.db.commit()
 
     def tearDown(self):
@@ -80,24 +110,58 @@ class AdminServiceTests(unittest.TestCase):
 
         self.assertEqual(overview['totalUsers'], 2)
         self.assertEqual(overview['totalJobs'], 1)
-        self.assertEqual(overview['totalReports'], 1)
-        self.assertEqual(overview['totalServiceRequests'], 1)
+        self.assertEqual(overview['totalReports'], 3)
+        self.assertEqual(overview['totalServiceRequests'], 2)
         self.assertEqual(overview['unreadNotifications'], 1)
         self.assertEqual(overview['pendingReviews'], 1)
 
-    def test_admin_lists_include_owner_and_labels(self):
+    def test_admin_can_read_other_users_ip_report(self):
+        report = report_service.get_user_report(self.db, self.report.id, self.admin)
+
+        self.assertIsNotNone(report)
+        self.assertEqual(report['id'], 'RPT-ADMIN-1')
+        self.assertEqual(report['title'], '侵权检测报告')
+        self.assertEqual(report['reportType'], 'ip_detection')
+
+    def test_admin_can_read_other_users_service_advice_report(self):
+        report = report_service.get_user_report(self.db, self.service_request.id, self.admin)
+
+        self.assertIsNotNone(report)
+        self.assertEqual(report['id'], 'APL-ADMIN-1')
+        self.assertEqual(report['title'], '申诉建议报告')
+        self.assertEqual(report['reportType'], 'appeal')
+        self.assertEqual(report['typeLabel'], '平台申诉')
+
+    def test_admin_lists_include_owner_labels_and_service_advice_rows(self):
         users = admin_service.get_admin_users(self.db, self.admin)
         reports = admin_service.get_admin_reports(self.db, self.admin)
         service_requests = admin_service.get_admin_service_requests(self.db, self.admin)
         notifications = admin_service.get_admin_notifications(self.db, self.admin)
 
         admin_row = next(row for row in users if row['mobile'] == '18182363760')
+        ip_row = next(row for row in reports if row['id'] == 'RPT-ADMIN-1')
+        appeal_row = next(row for row in reports if row['id'] == 'APL-ADMIN-1')
+        tro_row = next(row for row in reports if row['id'] == 'TRO-ADMIN-1')
+        appeal_request_row = next(row for row in service_requests if row['id'] == 'APL-ADMIN-1')
+
         self.assertEqual(admin_row['role'], 'admin')
-        self.assertEqual(reports[0]['ownerName'], '普通用户')
-        self.assertEqual(reports[0]['reportType'], 'ip_detection')
-        self.assertEqual(reports[0]['typeLabel'], '侵权检测')
-        self.assertEqual(service_requests[0]['typeLabel'], '平台申诉')
-        self.assertEqual(service_requests[0]['ownerMobile'], '13800138000')
+        self.assertEqual(ip_row['ownerName'], '普通用户')
+        self.assertEqual(ip_row['reportType'], 'ip_detection')
+        self.assertEqual(ip_row['typeLabel'], '侵权检测')
+        self.assertEqual(ip_row['linkId'], 'RPT-ADMIN-1')
+        self.assertEqual(appeal_row['reportType'], 'appeal')
+        self.assertEqual(appeal_row['typeLabel'], '平台申诉')
+        self.assertEqual(appeal_row['riskLevel'], 'medium')
+        self.assertIsNone(appeal_row['riskScore'])
+        self.assertEqual(appeal_row['ownerMobile'], '13800138000')
+        self.assertEqual(appeal_row['linkId'], 'APL-ADMIN-1')
+        self.assertEqual(tro_row['reportType'], 'tro_settlement')
+        self.assertEqual(tro_row['typeLabel'], 'TRO 和解')
+        self.assertEqual(tro_row['riskLevel'], 'low')
+        self.assertEqual(tro_row['ownerName'], '普通用户')
+        self.assertEqual(tro_row['linkId'], 'TRO-ADMIN-1')
+        self.assertEqual(appeal_request_row['typeLabel'], '平台申诉')
+        self.assertEqual(appeal_request_row['ownerMobile'], '13800138000')
         self.assertEqual(notifications[0]['ownerName'], '普通用户')
 
 

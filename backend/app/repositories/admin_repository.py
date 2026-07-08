@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.db.base import Job, Notification, Report, ServiceRequest, User
 from app.repositories.job_repository import get_job, job_to_dict, list_jobs, update_job_review
 from app.repositories.utils import format_datetime
+from app.services.report_service import service_request_report_to_dict
 
 
 def _type_label(value: str):
@@ -17,7 +18,7 @@ def _type_label(value: str):
 def get_admin_overview(db: Session):
     total_jobs = db.scalar(select(func.count()).select_from(Job)) or 0
     total_users = db.scalar(select(func.count()).select_from(User)) or 0
-    total_reports = db.scalar(select(func.count()).select_from(Report)) or 0
+    total_reports = (db.scalar(select(func.count()).select_from(Report)) or 0) + len(_list_service_report_rows(db, limit=None))
     total_service_requests = db.scalar(select(func.count()).select_from(ServiceRequest)) or 0
     unread_notifications = db.scalar(
         select(func.count()).select_from(Notification).where(Notification.is_read.is_(False))
@@ -54,6 +55,36 @@ def list_admin_users(db: Session, limit: int = 100) -> list[dict]:
 
 
 def list_admin_reports(db: Session, limit: int = 100) -> list[dict]:
+    rows = _list_ip_report_rows(db, limit) + _list_service_report_rows(db, limit)
+    return sorted(rows, key=lambda item: item['generatedAt'], reverse=True)[:limit]
+
+
+def list_admin_service_requests(db: Session, limit: int = 100) -> list[dict]:
+    query = (
+        select(ServiceRequest)
+        .options(selectinload(ServiceRequest.owner))
+        .order_by(ServiceRequest.created_at.desc())
+        .limit(limit)
+    )
+    rows = []
+    for item in db.scalars(query).all():
+        rows.append({
+            'id': item.id,
+            'requestType': item.request_type,
+            'typeLabel': _type_label(item.request_type),
+            'title': item.title,
+            'platform': item.platform,
+            'status': item.status,
+            'contact': item.contact,
+            'ownerName': item.owner.name if item.owner else '未绑定用户',
+            'ownerMobile': item.owner.mobile if item.owner else '',
+            'createdAt': format_datetime(item.created_at),
+            'linkId': item.id,
+        })
+    return rows
+
+
+def _list_ip_report_rows(db: Session, limit: int = 100) -> list[dict]:
     query = (
         select(Report)
         .options(selectinload(Report.job).selectinload(Job.owner))
@@ -78,26 +109,29 @@ def list_admin_reports(db: Session, limit: int = 100) -> list[dict]:
     return rows
 
 
-def list_admin_service_requests(db: Session, limit: int = 100) -> list[dict]:
+def _list_service_report_rows(db: Session, limit: int | None = 100) -> list[dict]:
     query = (
         select(ServiceRequest)
         .options(selectinload(ServiceRequest.owner))
         .order_by(ServiceRequest.created_at.desc())
-        .limit(limit)
     )
+    if limit is not None:
+        query = query.limit(limit)
     rows = []
     for item in db.scalars(query).all():
+        report = service_request_report_to_dict(item)
+        if not report:
+            continue
         rows.append({
-            'id': item.id,
-            'requestType': item.request_type,
-            'typeLabel': _type_label(item.request_type),
-            'title': item.title,
-            'platform': item.platform,
-            'status': item.status,
-            'contact': item.contact,
+            'id': report['id'],
+            'reportType': report['reportType'],
+            'typeLabel': report['typeLabel'],
+            'title': report['title'],
             'ownerName': item.owner.name if item.owner else '未绑定用户',
             'ownerMobile': item.owner.mobile if item.owner else '',
-            'createdAt': format_datetime(item.created_at),
+            'riskLevel': report['riskLevel'],
+            'riskScore': report['riskScore'],
+            'generatedAt': report['generatedAt'],
             'linkId': item.id,
         })
     return rows

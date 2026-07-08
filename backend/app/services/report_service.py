@@ -12,11 +12,17 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.config import get_settings
-from app.db.base import Evidence, Job, Report
+from app.db.base import Evidence, Job, Report, ServiceRequest
 from app.repositories import model_config_repository, report_repository
+from app.repositories.utils import format_datetime
 from app.services.uspto_service import USPTO_SOURCE_NAME, is_us_market, search_us_trademarks
 
 logger = logging.getLogger(__name__)
+
+SERVICE_REPORT_LABELS = {
+    'appeal': {'reportType': 'appeal', 'typeLabel': '平台申诉'},
+    'tro_settlement': {'reportType': 'tro_settlement', 'typeLabel': 'TRO 和解'},
+}
 
 
 def _risk_level(score: int) -> str:
@@ -25,6 +31,44 @@ def _risk_level(score: int) -> str:
     if score >= 45:
         return 'medium'
     return 'low'
+
+
+def _source_label(source: str | None) -> str:
+    return '港港跨境AI' if source == 'model' else '港港跨境基础评估'
+
+
+def service_request_report_to_dict(item: ServiceRequest) -> dict[str, Any] | None:
+    try:
+        details = json.loads(item.details_json or '{}')
+    except json.JSONDecodeError:
+        logger.exception('service request details json invalid request_id=%s', item.id)
+        return None
+    advice = details.get('adviceReport')
+    if not isinstance(advice, dict):
+        return None
+    meta = SERVICE_REPORT_LABELS.get(item.request_type)
+    if not meta:
+        return None
+    next_actions = advice.get('nextActions') or []
+    return {
+        'id': item.id,
+        'jobId': item.id,
+        'reportType': meta['reportType'],
+        'typeLabel': meta['typeLabel'],
+        'title': advice.get('title') or item.title,
+        'generatedAt': format_datetime(item.created_at),
+        'riskLevel': advice.get('riskLevel') or 'medium',
+        'riskScore': None,
+        'summary': advice.get('summary') or '',
+        'sections': advice.get('sections') or [],
+        'nextActions': next_actions,
+        'categoryScores': [],
+        'evidence': [],
+        'suggestions': next_actions,
+        'reviewStatus': 'none',
+        'reviewNote': '',
+        'sourceLabel': _source_label(advice.get('source')),
+    }
 
 
 def _demo_score(job: Job) -> int:
@@ -552,9 +596,19 @@ def get_user_job_results(db: Session, job: Job):
 
 def get_user_report(db: Session, report_id: str, user):
     report = report_repository.get_report(db, report_id)
-    if not report or not report.job or report.job.owner_id != user.id:
-        return None
-    return report_repository.report_to_dict(report)
+    if report and report.job and (report.job.owner_id == user.id or user.role == 'admin'):
+        data = report_repository.report_to_dict(report)
+        data.setdefault('reportType', 'ip_detection')
+        data.setdefault('typeLabel', '知识产权检测')
+        data.setdefault('sourceLabel', '港港跨境AI')
+        data.setdefault('sections', [])
+        data.setdefault('nextActions', data.get('suggestions', []))
+        return data
+    service_query = select(ServiceRequest).where(ServiceRequest.id == report_id)
+    if user.role != 'admin':
+        service_query = service_query.where(ServiceRequest.owner_id == user.id)
+    service_request = db.scalar(service_query)
+    return service_request_report_to_dict(service_request) if service_request else None
 
 
 def list_user_reports(db: Session, user):
