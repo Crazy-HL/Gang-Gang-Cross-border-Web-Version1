@@ -21,4 +21,5 @@ backend/uploads/
 .migration-backups/
 .claude/
 .superpowers/
+.worktrees/
 remotion-promo/out/
