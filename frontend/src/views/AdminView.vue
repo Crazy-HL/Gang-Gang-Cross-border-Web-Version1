@@ -121,6 +121,12 @@ async function loadAdminConsole() {
     notifications.value = notificationsData
   } catch (err) {
     if (err instanceof ApiError && err.status === 403) {
+      overview.value = null
+      jobs.value = []
+      users.value = []
+      reports.value = []
+      serviceRequests.value = []
+      notifications.value = []
       forbidden.value = true
       error.value = '当前账号没有管理员权限，无法查看后台数据'
       return
