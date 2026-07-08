@@ -249,7 +249,7 @@ const tabs = [
   { key: 'reports', label: '报告' },
   { key: 'serviceRequests', label: '服务需求' },
   { key: 'notifications', label: '消息' },
-  { key: 'modelConfig', label: '大模型配置' },
+  { key: 'modelConfig', label: '港港跨境AI配置' },
 ] as const
 
 type TabKey = (typeof tabs)[number]['key']
