@@ -46,6 +46,7 @@ class User(Base):
 
     jobs: Mapped[list['Job']] = relationship(back_populates='owner')
     notifications: Mapped[list['Notification']] = relationship(back_populates='user')
+    service_requests: Mapped[list['ServiceRequest']] = relationship(back_populates='owner')
 
 
 class Notification(Base):
@@ -108,6 +109,25 @@ class Job(Base):
     owner: Mapped[User | None] = relationship(back_populates='jobs')
     files: Mapped[list['JobFile']] = relationship(back_populates='job', cascade='all, delete-orphan')
     report: Mapped['Report | None'] = relationship(back_populates='job', cascade='all, delete-orphan')
+
+
+class ServiceRequest(Base):
+    __tablename__ = 'service_requests'
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True, index=True)
+    owner_id: Mapped[int] = mapped_column(ForeignKey('users.id'), index=True)
+    request_type: Mapped[str] = mapped_column(String(32), index=True)
+    title: Mapped[str] = mapped_column(String(255))
+    platform: Mapped[str] = mapped_column(String(80), index=True)
+    status: Mapped[str] = mapped_column(String(32), default='pending', index=True)
+    contact: Mapped[str] = mapped_column(String(80))
+    reference: Mapped[str] = mapped_column(Text, default='')
+    description: Mapped[str] = mapped_column(Text, default='')
+    details_json: Mapped[str] = mapped_column(Text, default='{}')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    owner: Mapped[User] = relationship(back_populates='service_requests')
 
 
 class JobFile(Base):

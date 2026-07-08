@@ -1,13 +1,15 @@
-<template><SiteHeader /><main class="mx-auto max-w-6xl px-5 py-12 print:max-w-none lg:px-8"><ReportViewer v-if="report" :report="report" mode="report" /><div v-else class="rounded-3xl border border-slate-200/80 bg-panel/75 p-8 text-center text-slate-500">报告加载中或不存在</div></main><SiteFooter /></template>
+<template><SiteHeader /><main class="mx-auto max-w-6xl px-5 py-12 print:max-w-none lg:px-8"><ReportViewer v-if="report" :report="report" mode="report" @contact="showContact = true" /><div v-else class="rounded-3xl border border-slate-200/80 bg-panel/75 p-8 text-center text-slate-500">报告加载中或不存在</div></main><ContactQrModal :open="showContact" @close="showContact = false" /><SiteFooter /></template>
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import SiteHeader from '@/components/site/SiteHeader.vue'
 import SiteFooter from '@/components/site/SiteFooter.vue'
 import ReportViewer from '@/components/results/ReportViewer.vue'
+import ContactQrModal from '@/components/common/ContactQrModal.vue'
 import { getReport } from '@/api/client'
 import type { DetectionReport } from '@/types/domain'
 const route = useRoute()
 const report = ref<DetectionReport | null>(null)
+const showContact = ref(false)
 onMounted(async () => { report.value = await getReport(String(route.params.id)) })
 </script>

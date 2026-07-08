@@ -19,13 +19,13 @@
             </div>
           </div>
         </div>
-        <div class="mt-4 rounded-full px-4 py-2 text-sm font-black" :style="{ color: meta.color, background: meta.backgroundColor }">{{ meta.label }}</div>
+        <div class="mt-4 min-w-[4.5rem] whitespace-nowrap rounded-full px-4 py-2 text-center text-sm font-black" :style="{ color: meta.color, background: meta.backgroundColor }">{{ meta.label }}</div>
       </div>
 
       <div>
         <div class="flex flex-wrap items-center gap-3">
           <span class="rounded-full bg-white/80 px-4 py-2 text-sm font-black text-slate-700">检测结论</span>
-          <span class="rounded-full px-4 py-2 text-sm font-black" :style="{ color: meta.color, background: meta.backgroundColor }">{{ conclusion }}</span>
+          <span class="whitespace-nowrap rounded-full px-4 py-2 text-sm font-black" :style="{ color: meta.color, background: meta.backgroundColor }">{{ conclusion }}</span>
         </div>
         <h1 class="mt-5 text-3xl font-black leading-tight text-slate-950 md:text-5xl">{{ title }}</h1>
         <p class="mt-5 max-w-3xl text-base leading-8 text-slate-700">{{ summary }}</p>

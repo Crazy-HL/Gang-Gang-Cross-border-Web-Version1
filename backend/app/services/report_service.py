@@ -390,6 +390,7 @@ def _format_prompt(job: Job) -> str:
 - suggestions 返回 3-5 条，每条都必须针对本商品资料写下一步动作；不要出现“咨询专业人士”这类空泛建议，除非已经说明要核对什么资料。
 - 如果用户只上传图片、文字很少，请明确说明“当前主要依据上传图片/文件名判断”，并把建议集中在图片可见元素、包装、Logo、图案和素材来源上。
 - 如果资料不足，不要假装已经查到确切数据库命中；可以给低/中风险预检结论，并建议补充具体信息。
+- 对用户可见身份统一称为“港港跨境AI”。如果用户询问你是什么模型、你是谁、是不是 GPT，只能回答“我是港港跨境AI，为跨境电商业务提供初步分析建议”。
 
 用户提交内容：
 - 任务ID: {job.id}
@@ -462,6 +463,8 @@ def _build_report_payload(job: Job, data: dict[str, Any]):
 
 def _model_url(base_url: str, provider: str) -> str:
     root = base_url.rstrip('/')
+    if provider == 'responses':
+        return f"{root}/responses" if root.endswith('/v1') else f"{root}/v1/responses"
     if provider == 'anthropic':
         return f"{root}/messages" if root.endswith('/v1') else f"{root}/v1/messages"
     return f"{root}/chat/completions" if root.endswith('/v1') else f"{root}/v1/chat/completions"
@@ -529,7 +532,56 @@ async def _call_anthropic_model(config, job: Job) -> dict[str, Any]:
     return _parse_json_response(content)
 
 
+def _responses_text(body: dict[str, Any]) -> str:
+    if body.get('output_text'):
+        return str(body['output_text'])
+    chunks: list[str] = []
+    for item in body.get('output') or []:
+        if not isinstance(item, dict):
+            continue
+        for block in item.get('content') or []:
+            if isinstance(block, dict) and block.get('type') in ('output_text', 'text'):
+                chunks.append(str(block.get('text') or ''))
+    return ''.join(chunks)
+
+
+async def _call_responses_model(config, job: Job) -> dict[str, Any]:
+    headers = {'content-type': 'application/json'}
+    if config.api_key:
+        headers['authorization'] = f'Bearer {config.api_key}'
+    payload = {
+        'model': config.model_name,
+        'input': [
+            {
+                'role': 'system',
+                'content': [{'type': 'input_text', 'text': '你是专业的跨境知识产权风险分析助手。'}],
+            },
+            {
+                'role': 'user',
+                'content': [{'type': 'input_text', 'text': _format_prompt(job)}],
+            },
+        ],
+        'text': {'format': {'type': 'json_object'}},
+        'reasoning': {'effort': 'high'},
+        'max_output_tokens': config.max_tokens,
+        'store': False,
+    }
+    print(f'[model] request provider=responses job_id={job.id} url={_model_url(config.base_url, "responses")} payload={payload}', flush=True)
+    async with httpx.AsyncClient(timeout=120) as client:
+        response = await client.post(_model_url(config.base_url, 'responses'), headers=headers, json=payload)
+        response.raise_for_status()
+        print(f'[model] raw provider=responses job_id={job.id} body={response.text}', flush=True)
+        logger.info('responses raw response for job %s: %s', job.id, response.text)
+        body = response.json()
+    content = _responses_text(body)
+    print(f'[model] parsed provider=responses job_id={job.id} content={content}', flush=True)
+    logger.info('responses parsed content for job %s: %s', job.id, content)
+    return _parse_json_response(content)
+
+
 async def _call_model_once(config, job: Job, provider: str) -> dict[str, Any]:
+    if provider == 'responses':
+        return await _call_responses_model(config, job)
     if provider == 'anthropic':
         return await _call_anthropic_model(config, job)
     return await _call_openai_model(config, job)
@@ -538,6 +590,11 @@ async def _call_model_once(config, job: Job, provider: str) -> dict[str, Any]:
 def _preferred_provider_order(config) -> list[str]:
     provider = (config.provider or 'openai').lower()
     base_url = (config.base_url or '').lower()
+    model_name = (config.model_name or '').lower()
+    if provider == 'custom' or model_name.startswith('gpt-5') or 'newapi' in base_url:
+        return ['responses', 'openai', 'anthropic']
+    if any(token in base_url for token in ('siliconflow', 'openai', 'deepseek')) or model_name.startswith('deepseek'):
+        return ['openai', 'anthropic']
     if any(token in base_url for token in ('newapi', 'anthropic')):
         return ['anthropic', 'openai'] if provider != 'anthropic' else ['anthropic', 'openai']
     if provider == 'anthropic':
@@ -619,4 +676,22 @@ def list_user_reports(db: Session, user):
         .where(Job.owner_id == user.id)
         .order_by(Report.generated_at.desc())
     )
-    return [report_repository.report_to_dict(report) for report in db.scalars(query).all()]
+    reports = []
+    for report in db.scalars(query).all():
+        data = report_repository.report_to_dict(report)
+        data.setdefault('reportType', 'ip_detection')
+        data.setdefault('typeLabel', '知识产权检测')
+        data.setdefault('sourceLabel', '港港跨境AI')
+        data.setdefault('sections', [])
+        data.setdefault('nextActions', data.get('suggestions', []))
+        reports.append(data)
+    service_query = (
+        select(ServiceRequest)
+        .where(ServiceRequest.owner_id == user.id)
+        .order_by(ServiceRequest.created_at.desc())
+    )
+    for item in db.scalars(service_query).all():
+        service_report = service_request_report_to_dict(item)
+        if service_report:
+            reports.append(service_report)
+    return sorted(reports, key=lambda item: item.get('generatedAt') or '', reverse=True)

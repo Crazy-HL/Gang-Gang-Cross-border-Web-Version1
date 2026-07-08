@@ -11,8 +11,10 @@
         <div class="text-sm font-semibold text-slate-700">产品入口</div>
         <div class="mt-3 flex flex-col gap-2 text-sm text-slate-500">
           <RouterLink to="/detect" class="hover:text-blue-700">上传检测</RouterLink>
+          <RouterLink to="/appeal" class="hover:text-blue-700">平台申诉</RouterLink>
+          <RouterLink to="/tro-settlement" class="hover:text-blue-700">TRO 和解</RouterLink>
           <RouterLink to="/dashboard" class="hover:text-blue-700">我的任务</RouterLink>
-          <RouterLink to="/reports/1001" class="hover:text-blue-700">示例报告</RouterLink>
+          <RouterLink to="/dashboard?tab=reports" class="hover:text-blue-700">我的报告</RouterLink>
         </div>
       </div>
       <div>

@@ -10,7 +10,7 @@
           </p>
         </div>
 
-        <div class="mt-6 rounded-[1.75rem] border border-blue-100 bg-white p-5 shadow-sm shadow-blue-900/5">
+        <div class="mt-6 grid gap-4 rounded-[1.75rem] border border-blue-100 bg-white p-5 shadow-sm shadow-blue-900/5 md:grid-cols-2">
           <label class="block text-sm font-black text-slate-950">
             目标国家
             <select
@@ -28,18 +28,37 @@
               <option value="全球">暂不确定</option>
             </select>
           </label>
+
+          <label class="block text-sm font-black text-slate-950">
+            目标平台
+            <select
+              v-model="platform"
+              class="mt-3 w-full rounded-2xl border border-orange-100 bg-orange-50 px-4 py-3 text-sm font-bold text-orange-900 outline-none transition focus:border-orange-300 focus:bg-white focus:ring-4 focus:ring-orange-100"
+              aria-label="目标平台"
+            >
+              <option value="">请选择目标平台</option>
+              <option value="亚马逊">亚马逊</option>
+              <option value="希音">希音</option>
+              <option value="Temu">Temu</option>
+              <option value="TikTok Shop">TikTok Shop</option>
+              <option value="速卖通">速卖通</option>
+              <option value="eBay">eBay</option>
+              <option value="独立站">独立站</option>
+              <option value="暂不确定">暂不确定</option>
+            </select>
+          </label>
         </div>
 
-        <div class="mt-6 grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+        <div class="mt-6 grid items-stretch gap-6 xl:grid-cols-[0.95fr_1.05fr]">
           <FileUploader :file="file" @file-change="file = $event" />
 
-          <label class="block rounded-[1.75rem] border border-slate-200/80 bg-white p-5 text-sm font-semibold text-slate-950 shadow-sm shadow-blue-900/5">
-            商品描述（可选）
+          <label class="flex h-full min-h-[24rem] flex-col rounded-[1.75rem] border border-blue-100 bg-[linear-gradient(145deg,#ffffff_0%,#f8fbff_58%,#fff7ed_100%)] p-5 text-sm font-semibold text-slate-950 shadow-sm shadow-blue-900/5">
+            <span class="text-sm font-black text-slate-950">商品描述（可选）</span>
+            <span class="mt-2 text-sm leading-6 text-slate-500">填写标题、详情文案、包装文字，或你担心的风险点。</span>
             <textarea
               v-model="formData.title"
               aria-label="商品描述"
-              rows="9"
-              class="mt-3 w-full resize-none rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
+              class="mt-4 min-h-0 flex-1 resize-none rounded-[1.25rem] border border-slate-200 bg-white/85 px-4 py-3 text-slate-900 shadow-inner shadow-blue-100/40 outline-none transition placeholder:text-slate-400 focus:border-blue-300 focus:bg-white focus:ring-4 focus:ring-blue-100"
               placeholder="例如：商品标题、详情描述、包装文案，或你担心的风险点"
             />
           </label>
@@ -105,6 +124,7 @@ import type { DetectionFormInput } from '@/types/domain'
 
 const router = useRouter()
 const file = ref<File | null>(null)
+const platform = ref('')
 const currentStage = ref('')
 const progress = ref(0)
 const isSubmitting = ref(false)
@@ -145,7 +165,8 @@ async function handleSubmit() {
   currentStage.value = '正在整理资料'
   progress.value = 12
   try {
-    const input = { ...formData, productLink: '', hasFile: Boolean(file.value), file: file.value ? { name: file.value.name, type: file.value.type, size: file.value.size } : undefined }
+    const title = [platform.value ? `目标平台：${platform.value}` : '', formData.title.trim()].filter(Boolean).join('\n')
+    const input = { ...formData, title, productLink: '', hasFile: Boolean(file.value), file: file.value ? { name: file.value.name, type: file.value.type, size: file.value.size } : undefined }
     const created = await createJob(input)
     progress.value = file.value ? 28 : 42
     currentStage.value = file.value ? '正在上传图片' : '正在启动检测'

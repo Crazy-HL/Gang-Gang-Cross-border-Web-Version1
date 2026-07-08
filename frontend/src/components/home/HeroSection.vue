@@ -19,7 +19,7 @@
 
         <div class="mt-9 flex flex-col gap-4 sm:flex-row">
           <ButtonLink href="/detect">免费检测</ButtonLink>
-          <ButtonLink href="/reports/1001" variant="secondary">查看预检示例</ButtonLink>
+          <ButtonLink href="/dashboard?tab=reports" variant="secondary">查看我的报告</ButtonLink>
         </div>
 
         <div class="mt-9 grid max-w-xl gap-3 sm:grid-cols-3">

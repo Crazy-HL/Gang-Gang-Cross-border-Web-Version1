@@ -1,11 +1,13 @@
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 DetectionType = Literal['trademark', 'design', 'copyright']
 RiskLevel = Literal['high', 'medium', 'low', 'pending']
 JobStatus = Literal['queued', 'processing', 'done', 'failed']
 UserRole = Literal['user', 'admin']
+ServiceRequestType = Literal['appeal', 'tro_settlement']
+ServiceRequestStatus = Literal['pending', 'reviewing', 'waiting_user', 'processing', 'done']
 
 
 class SelectOption(BaseModel):
@@ -28,6 +30,63 @@ class DetectionFormInput(BaseModel):
     title: str = ''
     hasFile: bool = False
     file: FileInfo | None = None
+
+
+class ServiceRequestCreate(BaseModel):
+    requestType: ServiceRequestType
+    platform: str
+    contact: str
+    title: str = ''
+    issueType: str = ''
+    caseStatus: str = ''
+    storeName: str = ''
+    frozenAmount: str = ''
+    caseNumber: str = ''
+    claimant: str = ''
+    reference: str = ''
+    description: str = ''
+    fileNames: list[str] = Field(default_factory=list)
+
+
+class AdviceReportSection(BaseModel):
+    title: str
+    items: list[str] = Field(default_factory=list)
+
+
+class ServiceAdviceReport(BaseModel):
+    title: str
+    summary: str
+    riskLevel: Literal['high', 'medium', 'low']
+    sections: list[AdviceReportSection] = Field(default_factory=list)
+    nextActions: list[str] = Field(default_factory=list)
+    contactHint: str
+    source: Literal['model', 'fallback'] = 'fallback'
+
+
+class ServiceRequestItem(BaseModel):
+    id: str
+    requestType: ServiceRequestType
+    title: str
+    platform: str
+    status: ServiceRequestStatus
+    contact: str
+    reference: str
+    description: str
+    issueType: str = ''
+    caseStatus: str = ''
+    storeName: str = ''
+    frozenAmount: str = ''
+    caseNumber: str = ''
+    claimant: str = ''
+    fileNames: list[str] = Field(default_factory=list)
+    adviceReport: ServiceAdviceReport | None = None
+    createdAt: str
+
+
+class ServiceRequestCreateResponse(BaseModel):
+    ok: bool
+    request: ServiceRequestItem
+    adviceReport: ServiceAdviceReport
 
 
 class EvidenceItem(BaseModel):
@@ -103,13 +162,18 @@ class DetectionReport(BaseModel):
     title: str
     generatedAt: str
     riskLevel: RiskLevel
-    riskScore: int
+    riskScore: int | None
     summary: str
     categoryScores: list[CategoryScore]
     evidence: list[EvidenceItem]
     suggestions: list[str]
     reviewStatus: str = 'none'
     reviewNote: str = ''
+    reportType: Literal['ip_detection', 'appeal', 'tro_settlement'] = 'ip_detection'
+    typeLabel: str = '知识产权检测'
+    sourceLabel: str = '港港跨境AI'
+    sections: list[AdviceReportSection] = Field(default_factory=list)
+    nextActions: list[str] = Field(default_factory=list)
 
 
 class NotificationItem(BaseModel):
