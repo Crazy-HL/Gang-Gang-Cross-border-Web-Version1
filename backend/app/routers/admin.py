@@ -9,6 +9,31 @@ from app.services import admin_service
 router = APIRouter(prefix='/api/admin', tags=['admin'])
 
 
+@router.get('/overview')
+def read_admin_overview(db: DbSession, user: User = Depends(get_current_user)):
+    return admin_service.get_admin_overview(db, user)
+
+
+@router.get('/users')
+def read_admin_users(db: DbSession, user: User = Depends(get_current_user)):
+    return admin_service.get_admin_users(db, user)
+
+
+@router.get('/reports')
+def read_admin_reports(db: DbSession, user: User = Depends(get_current_user)):
+    return admin_service.get_admin_reports(db, user)
+
+
+@router.get('/service-requests')
+def read_admin_service_requests(db: DbSession, user: User = Depends(get_current_user)):
+    return admin_service.get_admin_service_requests(db, user)
+
+
+@router.get('/notifications')
+def read_admin_notifications(db: DbSession, user: User = Depends(get_current_user)):
+    return admin_service.get_admin_notifications(db, user)
+
+
 @router.get('/jobs')
 def read_admin_jobs(db: DbSession, user: User = Depends(get_current_user)):
     return admin_service.get_admin_jobs(db, user)

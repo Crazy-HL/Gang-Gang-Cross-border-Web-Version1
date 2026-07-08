@@ -1,0 +1,105 @@
+import json
+import unittest
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.db.base import Base, Job, Notification, Report, ServiceRequest, User
+from app.services import admin_service
+
+
+class AdminServiceTests(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine('sqlite:///:memory:')
+        Base.metadata.create_all(self.engine)
+        self.SessionLocal = sessionmaker(bind=self.engine)
+        self.db: Session = self.SessionLocal()
+        self.admin = User(mobile='18182363760', name='管理员', password_hash='x', role='admin')
+        self.normal = User(mobile='13800138000', name='普通用户', password_hash='x', role='user')
+        self.db.add_all([self.admin, self.normal])
+        self.db.commit()
+        self.db.refresh(self.admin)
+        self.db.refresh(self.normal)
+        self.job = Job(
+            id='JOB-ADMIN-1',
+            owner_id=self.normal.id,
+            type='copyright',
+            title='测试商品',
+            brand='测试品牌',
+            category='家居',
+            market='amazon',
+            status='done',
+            risk_level='high',
+            risk_score=88,
+            review_status='pending',
+        )
+        self.report = Report(
+            id='RPT-ADMIN-1',
+            job_id='JOB-ADMIN-1',
+            title='侵权检测报告',
+            risk_level='high',
+            risk_score=88,
+            summary='测试摘要',
+            suggestions_json=json.dumps(['联系港港跨境'], ensure_ascii=False),
+        )
+        self.service_request = ServiceRequest(
+            id='APL-ADMIN-1',
+            owner_id=self.normal.id,
+            request_type='appeal',
+            title='亚马逊申诉',
+            platform='亚马逊',
+            status='pending',
+            contact='13800138000',
+            reference='ASIN-TEST',
+            description='测试服务需求',
+            details_json=json.dumps({'adviceReport': {'title': '建议报告'}}, ensure_ascii=False),
+        )
+        self.notification = Notification(
+            user_id=self.normal.id,
+            title='报告已生成',
+            content='港港跨境AI 已生成报告',
+            type='report',
+            is_read=False,
+        )
+        self.db.add_all([self.job, self.report, self.service_request, self.notification])
+        self.db.commit()
+
+    def tearDown(self):
+        self.db.close()
+        Base.metadata.drop_all(self.engine)
+        self.engine.dispose()
+
+    def test_normal_user_cannot_read_admin_overview(self):
+        with self.assertRaises(Exception) as ctx:
+            admin_service.get_admin_overview(self.db, self.normal)
+
+        self.assertEqual(ctx.exception.status_code, 403)
+
+    def test_admin_overview_counts_core_tables(self):
+        overview = admin_service.get_admin_overview(self.db, self.admin)
+
+        self.assertEqual(overview['totalUsers'], 2)
+        self.assertEqual(overview['totalJobs'], 1)
+        self.assertEqual(overview['totalReports'], 1)
+        self.assertEqual(overview['totalServiceRequests'], 1)
+        self.assertEqual(overview['unreadNotifications'], 1)
+        self.assertEqual(overview['pendingReviews'], 1)
+
+    def test_admin_lists_include_owner_and_labels(self):
+        users = admin_service.get_admin_users(self.db, self.admin)
+        reports = admin_service.get_admin_reports(self.db, self.admin)
+        service_requests = admin_service.get_admin_service_requests(self.db, self.admin)
+        notifications = admin_service.get_admin_notifications(self.db, self.admin)
+
+        admin_row = next(row for row in users if row['mobile'] == '18182363760')
+        self.assertEqual(admin_row['role'], 'admin')
+        self.assertEqual(reports[0]['ownerName'], '普通用户')
+        self.assertEqual(reports[0]['reportType'], 'ip_detection')
+        self.assertEqual(reports[0]['typeLabel'], '侵权检测')
+        self.assertEqual(service_requests[0]['typeLabel'], '平台申诉')
+        self.assertEqual(service_requests[0]['ownerMobile'], '13800138000')
+        self.assertEqual(notifications[0]['ownerName'], '普通用户')
+
+
+if __name__ == '__main__':
+    unittest.main()

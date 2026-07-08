@@ -16,6 +16,31 @@ def get_admin_jobs(db: Session, user: User):
     return admin_repository.get_admin_jobs(db)
 
 
+def get_admin_overview(db: Session, user: User):
+    ensure_admin(user)
+    return admin_repository.get_admin_overview(db)
+
+
+def get_admin_users(db: Session, user: User):
+    ensure_admin(user)
+    return admin_repository.list_admin_users(db)
+
+
+def get_admin_reports(db: Session, user: User):
+    ensure_admin(user)
+    return admin_repository.list_admin_reports(db)
+
+
+def get_admin_service_requests(db: Session, user: User):
+    ensure_admin(user)
+    return admin_repository.list_admin_service_requests(db)
+
+
+def get_admin_notifications(db: Session, user: User):
+    ensure_admin(user)
+    return admin_repository.list_admin_notifications(db)
+
+
 def update_job_review(db: Session, user: User, job_id: str, review_status: str, review_note: str):
     ensure_admin(user)
     note = review_note.strip()
