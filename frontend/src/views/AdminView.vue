@@ -17,10 +17,18 @@
     </div>
 
     <div
-      v-if="loading && !overview"
+      v-if="loading && !overview && !forbidden && !error"
       class="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500"
     >
       正在加载管理员后台数据...
+    </div>
+
+    <div
+      v-else-if="forbidden && !overview"
+      class="rounded-lg border border-amber-200 bg-amber-50 p-10 text-center"
+    >
+      <p class="text-sm font-medium text-amber-800">{{ error }}</p>
+      <p class="mt-2 text-sm text-amber-700">请使用管理员账号重新登录后再访问。</p>
     </div>
 
     <div
@@ -63,6 +71,7 @@ import SiteHeader from '@/components/site/SiteHeader.vue'
 import SiteFooter from '@/components/site/SiteFooter.vue'
 import AdminDashboard from '@/components/admin/AdminDashboard.vue'
 import {
+  ApiError,
   getAdminJobs,
   getAdminNotifications,
   getAdminOverview,
@@ -87,10 +96,12 @@ const serviceRequests = ref<AdminServiceRequestRow[]>([])
 const notifications = ref<AdminNotificationRow[]>([])
 const loading = ref(true)
 const error = ref('')
+const forbidden = ref(false)
 
 async function loadAdminConsole() {
   loading.value = true
   error.value = ''
+  forbidden.value = false
   try {
     const [overviewData, jobsData, usersData, reportsData, serviceRequestsData, notificationsData] =
       await Promise.all([
@@ -108,7 +119,13 @@ async function loadAdminConsole() {
     reports.value = reportsData
     serviceRequests.value = serviceRequestsData
     notifications.value = notificationsData
-  } catch {
+  } catch (err) {
+    if (err instanceof ApiError && err.status === 403) {
+      forbidden.value = true
+      error.value = '当前账号没有管理员权限，无法查看后台数据'
+      return
+    }
+
     error.value = '管理员后台数据加载失败，请稍后重试'
   } finally {
     loading.value = false

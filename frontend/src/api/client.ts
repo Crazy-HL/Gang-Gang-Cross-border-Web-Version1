@@ -20,6 +20,16 @@ import type {
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 let authToken = ''
 
+export class ApiError extends Error {
+  status: number
+
+  constructor(status: number, message: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+  }
+}
+
 export function setAuthToken(token: string) {
   authToken = token
 }
@@ -40,7 +50,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     } catch {
       detail = ''
     }
-    throw new Error(detail || `API request failed: ${response.status}`)
+    throw new ApiError(response.status, detail || `API request failed: ${response.status}`)
   }
   return response.json() as Promise<T>
 }

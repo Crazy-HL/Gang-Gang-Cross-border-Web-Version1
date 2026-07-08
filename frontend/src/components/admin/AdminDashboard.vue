@@ -279,7 +279,7 @@ const overviewRows = computed(() => [
   { label: '高风险任务占比', value: highRiskRateLabel.value },
 ])
 
-const showKeywordFilter = computed(() => activeTab.value !== 'overview' && activeTab.value !== 'modelConfig')
+const showKeywordFilter = computed(() => activeTab.value !== 'overview' && activeTab.value !== 'modelConfig' && activeTab.value !== 'jobs')
 
 function includesKeyword(values: Array<string | number | null | undefined>) {
   const text = values.filter(Boolean).join(' ').toLowerCase()
