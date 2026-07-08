@@ -53,20 +53,28 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getUnreadNotificationCount } from '@/api/client'
 import { logout, user } from '@/stores/auth'
 
 const router = useRouter()
 const unreadCount = ref(0)
-const navItems = [
+
+const baseNavItems = [
   { href: '/', label: '首页' },
   { href: '/detect', label: '检测上传' },
+  { href: '/appeal', label: '平台申诉' },
+  { href: '/tro-settlement', label: 'TRO 和解' },
   { href: '/dashboard', label: '用户中心' },
-  { href: '/reports/1001', label: '报告' },
-  { href: '/admin', label: '后台' }
+  { href: '/dashboard?tab=reports', label: '报告' }
 ]
+
+const navItems = computed(() => {
+  const items = [...baseNavItems]
+  if (user.value?.role === 'admin') items.push({ href: '/admin', label: '后台' })
+  return items
+})
 
 async function loadUnreadCount() {
   if (!user.value) {
