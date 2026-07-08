@@ -33,7 +33,7 @@
       <label class="text-sm font-semibold text-slate-950">
         服务地址
         <input
-          v-model="form.baseUrl"
+          v-model="baseUrlDisplay"
           class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900"
           :placeholder="baseUrlPlaceholder"
         />
@@ -109,13 +109,22 @@ const form = reactive({
 const saving = ref(false)
 const message = ref('')
 const hideModelNameValue = ref(/gpt/i.test(form.modelName))
-const baseUrlPlaceholder = computed(() =>
-  form.provider === 'custom'
-    ? '港港跨境AI服务地址'
-    : form.provider === 'anthropic'
-      ? 'https://api.anthropic.com/v1'
-      : 'https://api.openai.com/v1',
-)
+const hiddenBaseUrls = new Set([
+  'https://newapi.lxhei.xyz/v1',
+  'https://api.openai.com/v1',
+  'https://api.anthropic.com/v1',
+])
+const hideBaseUrlValue = ref(hiddenBaseUrls.has(form.baseUrl))
+const baseUrlPlaceholder = computed(() => '港港跨境AI服务地址')
+const baseUrlDisplay = computed({
+  get() {
+    return hideBaseUrlValue.value ? '' : form.baseUrl
+  },
+  set(value: string) {
+    hideBaseUrlValue.value = false
+    form.baseUrl = value
+  },
+})
 const modelNameDisplay = computed({
   get() {
     return hideModelNameValue.value ? '' : form.modelName
@@ -131,6 +140,7 @@ onMounted(async () => {
   if (data.config) {
     Object.assign(form, { ...data.config, apiKey: '' })
     hideModelNameValue.value = /gpt/i.test(form.modelName)
+    hideBaseUrlValue.value = hiddenBaseUrls.has(form.baseUrl)
   }
 })
 
