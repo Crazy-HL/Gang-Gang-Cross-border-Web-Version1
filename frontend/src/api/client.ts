@@ -1,4 +1,21 @@
-import type { AdminStats, AuthUser, DetectionFormInput, DetectionJob, DetectionReport, ModelConfigResponse, NotificationListResponse, SelectOption } from '@/types/domain'
+import type {
+  AdminNotificationRow,
+  AdminOverview,
+  AdminReportRow,
+  AdminServiceRequestRow,
+  AdminStats,
+  AdminUserRow,
+  AuthUser,
+  DetectionFormInput,
+  DetectionJob,
+  DetectionReport,
+  ModelConfigResponse,
+  NotificationListResponse,
+  SelectOption,
+  ServiceAdviceReport,
+  ServiceRequestInput,
+  ServiceRequestItem,
+} from '@/types/domain'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 let authToken = ''
@@ -15,7 +32,16 @@ function withAuthHeaders(options?: RequestInit): RequestInit {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE_URL}${path}`, withAuthHeaders(options))
-  if (!response.ok) throw new Error(`API request failed: ${response.status}`)
+  if (!response.ok) {
+    let detail = ''
+    try {
+      const body = await response.json() as { detail?: string }
+      detail = body.detail ?? ''
+    } catch {
+      detail = ''
+    }
+    throw new Error(detail || `API request failed: ${response.status}`)
+  }
   return response.json() as Promise<T>
 }
 
@@ -81,12 +107,40 @@ export function getReports() {
   return request<DetectionReport[]>('/api/reports')
 }
 
+export function getServiceRequests() {
+  return request<ServiceRequestItem[]>('/api/service-requests')
+}
+
+export function createServiceRequest(input: ServiceRequestInput) {
+  return request<{ ok: boolean; request: ServiceRequestItem; adviceReport: ServiceAdviceReport }>('/api/service-requests', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(input) })
+}
+
 export function getReport(id: string) {
   return request<DetectionReport>(`/api/reports/${encodeURIComponent(id)}`)
 }
 
 export function getAdminJobs() {
   return request<{ stats: AdminStats; jobs: DetectionJob[] }>('/api/admin/jobs')
+}
+
+export function getAdminOverview() {
+  return request<AdminOverview>('/api/admin/overview')
+}
+
+export function getAdminUsers() {
+  return request<AdminUserRow[]>('/api/admin/users')
+}
+
+export function getAdminReports() {
+  return request<AdminReportRow[]>('/api/admin/reports')
+}
+
+export function getAdminServiceRequests() {
+  return request<AdminServiceRequestRow[]>('/api/admin/service-requests')
+}
+
+export function getAdminNotifications() {
+  return request<AdminNotificationRow[]>('/api/admin/notifications')
 }
 
 export function updateAdminJobReview(jobId: string, reviewStatus: 'approved' | 'rejected', reviewNote = '') {

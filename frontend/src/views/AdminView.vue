@@ -1,12 +1,121 @@
-<template><SiteHeader /><main class="mx-auto max-w-7xl px-5 py-12 lg:px-8"><div class="mb-8"><p class="text-sm font-bold uppercase tracking-[0.35em] text-slate-700">Admin</p><h1 class="mt-4 text-4xl font-black text-slate-950">运营管理后台</h1></div><AdminDashboard v-if="stats && jobs" :stats="stats" :jobs="jobs" /></main><SiteFooter /></template>
+<template>
+  <SiteHeader />
+  <main class="mx-auto max-w-7xl px-5 py-10 lg:px-8">
+    <div class="mb-8 flex items-end justify-between gap-4">
+      <div>
+        <p class="text-sm font-bold uppercase tracking-[0.35em] text-slate-700">Admin</p>
+        <h1 class="mt-3 text-3xl font-black text-slate-950">运营管理后台</h1>
+      </div>
+      <button
+        type="button"
+        class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-slate-400 hover:text-slate-950"
+        :disabled="loading"
+        @click="loadAdminConsole"
+      >
+        {{ loading ? '刷新中' : '刷新数据' }}
+      </button>
+    </div>
+
+    <div
+      v-if="loading && !overview"
+      class="rounded-lg border border-slate-200 bg-white p-10 text-center text-sm text-slate-500"
+    >
+      正在加载管理员后台数据...
+    </div>
+
+    <div
+      v-else-if="error && !overview"
+      class="rounded-lg border border-rose-200 bg-rose-50 p-10 text-center"
+    >
+      <p class="text-sm font-medium text-rose-700">{{ error }}</p>
+      <button
+        type="button"
+        class="mt-4 rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white"
+        @click="loadAdminConsole"
+      >
+        重试
+      </button>
+    </div>
+
+    <div v-else-if="overview" class="space-y-4">
+      <div
+        v-if="error"
+        class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700"
+      >
+        {{ error }}
+      </div>
+      <AdminDashboard
+        :overview="overview"
+        :jobs="jobs"
+        :users="users"
+        :reports="reports"
+        :service-requests="serviceRequests"
+        :notifications="notifications"
+      />
+    </div>
+  </main>
+  <SiteFooter />
+</template>
+
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import SiteHeader from '@/components/site/SiteHeader.vue'
 import SiteFooter from '@/components/site/SiteFooter.vue'
 import AdminDashboard from '@/components/admin/AdminDashboard.vue'
-import { getAdminJobs } from '@/api/client'
-import type { AdminStats, DetectionJob } from '@/types/domain'
-const stats = ref<AdminStats | null>(null)
-const jobs = ref<DetectionJob[] | null>(null)
-onMounted(async () => { const data = await getAdminJobs(); stats.value = data.stats; jobs.value = data.jobs })
+import {
+  getAdminJobs,
+  getAdminNotifications,
+  getAdminOverview,
+  getAdminReports,
+  getAdminServiceRequests,
+  getAdminUsers,
+} from '@/api/client'
+import type {
+  AdminNotificationRow,
+  AdminOverview,
+  AdminReportRow,
+  AdminServiceRequestRow,
+  AdminUserRow,
+  DetectionJob,
+} from '@/types/domain'
+
+const overview = ref<AdminOverview | null>(null)
+const jobs = ref<DetectionJob[]>([])
+const users = ref<AdminUserRow[]>([])
+const reports = ref<AdminReportRow[]>([])
+const serviceRequests = ref<AdminServiceRequestRow[]>([])
+const notifications = ref<AdminNotificationRow[]>([])
+const loading = ref(true)
+const error = ref('')
+
+async function loadAdminConsole() {
+  loading.value = true
+  error.value = ''
+  try {
+    const [overviewData, jobsData, usersData, reportsData, serviceRequestsData, notificationsData] =
+      await Promise.all([
+        getAdminOverview(),
+        getAdminJobs(),
+        getAdminUsers(),
+        getAdminReports(),
+        getAdminServiceRequests(),
+        getAdminNotifications(),
+      ])
+
+    overview.value = overviewData
+    jobs.value = jobsData.jobs
+    users.value = usersData
+    reports.value = reportsData
+    serviceRequests.value = serviceRequestsData
+    notifications.value = notificationsData
+  } catch {
+    error.value = '管理员后台数据加载失败，请稍后重试'
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  void loadAdminConsole()
+})
 </script>
