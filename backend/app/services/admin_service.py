@@ -2,47 +2,54 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.db.base import User
-from app.repositories import admin_repository, model_config_repository
+from app.repositories import admin_account_repository, admin_repository, model_config_repository
 from app.services import notification_service
 
 
-def ensure_admin(user: User):
-    if user.role != 'admin':
+def ensure_admin(db: Session, user: User):
+    if user.role == 'admin' or admin_account_repository.is_active_admin(db, user.id):
+        return
+    else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Forbidden')
 
 
 def get_admin_jobs(db: Session, user: User):
-    ensure_admin(user)
+    ensure_admin(db, user)
     return admin_repository.get_admin_jobs(db)
 
 
 def get_admin_overview(db: Session, user: User):
-    ensure_admin(user)
+    ensure_admin(db, user)
     return admin_repository.get_admin_overview(db)
 
 
 def get_admin_users(db: Session, user: User):
-    ensure_admin(user)
+    ensure_admin(db, user)
     return admin_repository.list_admin_users(db)
 
 
 def get_admin_reports(db: Session, user: User):
-    ensure_admin(user)
+    ensure_admin(db, user)
     return admin_repository.list_admin_reports(db)
 
 
 def get_admin_service_requests(db: Session, user: User):
-    ensure_admin(user)
+    ensure_admin(db, user)
     return admin_repository.list_admin_service_requests(db)
 
 
 def get_admin_notifications(db: Session, user: User):
-    ensure_admin(user)
+    ensure_admin(db, user)
     return admin_repository.list_admin_notifications(db)
 
 
+def get_admin_login_records(db: Session, user: User):
+    ensure_admin(db, user)
+    return admin_repository.list_admin_login_records(db)
+
+
 def update_job_review(db: Session, user: User, job_id: str, review_status: str, review_note: str):
-    ensure_admin(user)
+    ensure_admin(db, user)
     note = review_note.strip()
     job = admin_repository.get_admin_job(db, job_id)
     result = admin_repository.update_admin_job_review(db, job_id, review_status, note)
@@ -54,12 +61,12 @@ def update_job_review(db: Session, user: User, job_id: str, review_status: str, 
 
 
 def get_model_config(db: Session, user: User):
-    ensure_admin(user)
+    ensure_admin(db, user)
     config = model_config_repository.get_model_config(db)
     return {'config': model_config_repository.model_config_to_dict(config) if config else None}
 
 
 def update_model_config(db: Session, user: User, provider: str, model_name: str, api_key: str, base_url: str, temperature: float, max_tokens: int, enabled: bool):
-    ensure_admin(user)
+    ensure_admin(db, user)
     config = model_config_repository.upsert_model_config(db, provider, model_name, api_key, base_url, temperature, max_tokens, enabled)
     return {'config': model_config_repository.model_config_to_dict(config)}

@@ -78,9 +78,12 @@
                 <th class="px-4 py-3 text-left font-medium">用户</th>
                 <th class="px-4 py-3 text-left font-medium">手机号</th>
                 <th class="px-4 py-3 text-left font-medium">角色</th>
-                <th class="px-4 py-3 text-right font-medium">检测任务</th>
-                <th class="px-4 py-3 text-right font-medium">服务需求</th>
                 <th class="px-4 py-3 text-left font-medium">注册时间</th>
+                <th class="px-4 py-3 text-left font-medium">最近登录</th>
+                <th class="px-4 py-3 text-right font-medium">登录次数</th>
+                <th class="px-4 py-3 text-right font-medium">检测任务</th>
+                <th class="px-4 py-3 text-right font-medium">报告</th>
+                <th class="px-4 py-3 text-right font-medium">服务需求</th>
               </tr>
             </thead>
             <tbody class="divide-y divide-slate-200 bg-white">
@@ -88,18 +91,51 @@
                 <td class="px-4 py-3 font-medium text-slate-950">{{ row.name }}</td>
                 <td class="px-4 py-3 text-slate-600">{{ row.mobile }}</td>
                 <td class="px-4 py-3 text-slate-600">{{ roleLabel(row.role) }}</td>
-                <td class="px-4 py-3 text-right text-slate-950">{{ row.jobCount }}</td>
-                <td class="px-4 py-3 text-right text-slate-950">{{ row.serviceRequestCount }}</td>
                 <td class="px-4 py-3 text-slate-600">{{ row.createdAt }}</td>
+                <td class="px-4 py-3 text-slate-600">{{ row.lastLoginAt || '-' }}</td>
+                <td class="px-4 py-3 text-right text-slate-950">{{ row.loginCount }}</td>
+                <td class="px-4 py-3 text-right text-slate-950">{{ row.jobCount }}</td>
+                <td class="px-4 py-3 text-right text-slate-950">{{ row.reportCount }}</td>
+                <td class="px-4 py-3 text-right text-slate-950">{{ row.serviceRequestCount }}</td>
               </tr>
               <tr v-if="!filteredUsers.length">
-                <td colspan="6" class="px-4 py-8 text-center text-slate-500">暂无匹配用户</td>
+                <td colspan="9" class="px-4 py-8 text-center text-slate-500">暂无匹配用户</td>
               </tr>
             </tbody>
           </table>
         </div>
 
         <AdminTaskTable v-else-if="activeTab === 'jobs'" :jobs="props.jobs" />
+
+        <div v-else-if="activeTab === 'loginRecords'" class="overflow-x-auto rounded-lg border border-slate-200">
+          <table class="min-w-full divide-y divide-slate-200 text-sm">
+            <thead class="bg-slate-50 text-slate-600">
+              <tr>
+                <th class="px-4 py-3 text-left font-medium">用户</th>
+                <th class="px-4 py-3 text-left font-medium">手机号</th>
+                <th class="px-4 py-3 text-left font-medium">角色</th>
+                <th class="px-4 py-3 text-left font-medium">登录方式</th>
+                <th class="px-4 py-3 text-left font-medium">IP</th>
+                <th class="px-4 py-3 text-left font-medium">浏览器 / 设备</th>
+                <th class="px-4 py-3 text-left font-medium">登录时间</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-200 bg-white">
+              <tr v-for="row in filteredLoginRecords" :key="row.id">
+                <td class="px-4 py-3 font-medium text-slate-950">{{ row.name }}</td>
+                <td class="px-4 py-3 text-slate-600">{{ row.mobile }}</td>
+                <td class="px-4 py-3 text-slate-600">{{ roleLabel(row.role) }}</td>
+                <td class="px-4 py-3 text-slate-600">{{ loginMethodLabel(row.loginMethod) }}</td>
+                <td class="px-4 py-3 text-slate-600">{{ row.ipAddress || '-' }}</td>
+                <td class="max-w-xs truncate px-4 py-3 text-slate-600" :title="row.userAgent">{{ row.userAgent || '-' }}</td>
+                <td class="px-4 py-3 text-slate-600">{{ row.createdAt }}</td>
+              </tr>
+              <tr v-if="!filteredLoginRecords.length">
+                <td colspan="7" class="px-4 py-8 text-center text-slate-500">暂无匹配登录记录</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <div v-else-if="activeTab === 'reports'" class="overflow-x-auto rounded-lg border border-slate-200">
           <table class="min-w-full divide-y divide-slate-200 text-sm">
@@ -222,6 +258,7 @@ import AdminTaskTable from '@/components/admin/AdminTaskTable.vue'
 import ModelConfigPanel from '@/components/admin/ModelConfigPanel.vue'
 import type {
   AdminNotificationRow,
+  AdminLoginRecordRow,
   AdminOverview,
   AdminReportRow,
   AdminServiceRequestRow,
@@ -240,12 +277,14 @@ const props = defineProps<{
   reports: AdminReportRow[]
   serviceRequests: AdminServiceRequestRow[]
   notifications: AdminNotificationRow[]
+  loginRecords: AdminLoginRecordRow[]
 }>()
 
 const tabs = [
   { key: 'overview', label: '概览' },
   { key: 'users', label: '用户' },
   { key: 'jobs', label: '检测任务' },
+  { key: 'loginRecords', label: '登录记录' },
   { key: 'reports', label: '报告' },
   { key: 'serviceRequests', label: '服务需求' },
   { key: 'notifications', label: '消息' },
@@ -288,13 +327,27 @@ function includesKeyword(values: Array<string | number | null | undefined>) {
 
 const filteredUsers = computed(() =>
   props.users.filter((row) =>
-    includesKeyword([row.name, row.mobile, row.role, row.createdAt]),
+    includesKeyword([row.name, row.mobile, row.role, row.createdAt, row.lastLoginAt]),
   ),
 )
 
 const filteredReports = computed(() =>
   props.reports.filter((row) =>
     includesKeyword([row.title, row.typeLabel, row.ownerName, row.ownerMobile, row.generatedAt]),
+  ),
+)
+
+const filteredLoginRecords = computed(() =>
+  props.loginRecords.filter((row) =>
+    includesKeyword([
+      row.name,
+      row.mobile,
+      row.role,
+      row.loginMethod,
+      row.ipAddress,
+      row.userAgent,
+      row.createdAt,
+    ]),
   ),
 )
 
@@ -334,6 +387,14 @@ function setActiveTab(tab: TabKey) {
 
 function roleLabel(role: UserRole) {
   return role === 'admin' ? '管理员' : '用户'
+}
+
+function loginMethodLabel(method: string) {
+  return {
+    password: '密码登录',
+    sms_code: '验证码登录',
+    register: '注册登录',
+  }[method] ?? method
 }
 
 function serviceStatusLabel(status: ServiceRequestStatus) {

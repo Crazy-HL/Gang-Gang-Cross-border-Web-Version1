@@ -1,7 +1,7 @@
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.base import Job, Notification, Report, ServiceRequest, User
+from app.db.base import AdminAccount, Job, LoginRecord, Notification, Report, ServiceRequest, User
 from app.repositories.job_repository import get_job, job_to_dict, list_jobs, update_job_review
 from app.repositories.utils import format_datetime
 from app.services.report_service import service_request_report_to_dict
@@ -40,16 +40,51 @@ def get_admin_overview(db: Session):
 
 def list_admin_users(db: Session, limit: int = 100) -> list[dict]:
     users = db.scalars(select(User).order_by(User.created_at.desc()).limit(limit)).all()
+    active_admin_ids = set(db.scalars(select(AdminAccount.user_id).where(AdminAccount.enabled.is_(True))).all())
+    user_ids = [user.id for user in users]
+    job_counts = {user_id: 0 for user_id in user_ids}
+    report_counts = {user_id: 0 for user_id in user_ids}
+    service_request_counts = {user_id: 0 for user_id in user_ids}
+    login_counts = {user_id: 0 for user_id in user_ids}
+    last_login_at = {user_id: '' for user_id in user_ids}
+
+    if user_ids:
+        for user_id, count in db.execute(
+            select(Job.owner_id, func.count()).where(Job.owner_id.in_(user_ids)).group_by(Job.owner_id)
+        ):
+            job_counts[user_id] = count
+        for user_id, count in db.execute(
+            select(Job.owner_id, func.count(Report.id))
+            .join(Report, Report.job_id == Job.id)
+            .where(Job.owner_id.in_(user_ids))
+            .group_by(Job.owner_id)
+        ):
+            report_counts[user_id] = count
+        for user_id, count in db.execute(
+            select(ServiceRequest.owner_id, func.count()).where(ServiceRequest.owner_id.in_(user_ids)).group_by(ServiceRequest.owner_id)
+        ):
+            service_request_counts[user_id] = count
+        for user_id, count, latest_at in db.execute(
+            select(LoginRecord.user_id, func.count(), func.max(LoginRecord.created_at))
+            .where(LoginRecord.user_id.in_(user_ids))
+            .group_by(LoginRecord.user_id)
+        ):
+            login_counts[user_id] = count
+            last_login_at[user_id] = format_datetime(latest_at)
+
     rows = []
     for user in users:
         rows.append({
             'id': user.id,
             'mobile': user.mobile,
             'name': user.name,
-            'role': user.role,
+            'role': 'admin' if user.role == 'admin' or user.id in active_admin_ids else user.role,
             'createdAt': format_datetime(user.created_at),
-            'jobCount': len(user.jobs),
-            'serviceRequestCount': len(user.service_requests),
+            'jobCount': job_counts[user.id],
+            'reportCount': report_counts[user.id],
+            'serviceRequestCount': service_request_counts[user.id],
+            'loginCount': login_counts[user.id],
+            'lastLoginAt': last_login_at[user.id],
         })
     return rows
 
@@ -154,6 +189,29 @@ def list_admin_notifications(db: Session, limit: int = 100) -> list[dict]:
             'isRead': item.is_read,
             'ownerName': item.user.name if item.user else '未绑定用户',
             'ownerMobile': item.user.mobile if item.user else '',
+            'createdAt': format_datetime(item.created_at),
+        })
+    return rows
+
+
+def list_admin_login_records(db: Session, limit: int = 100) -> list[dict]:
+    query = (
+        select(LoginRecord)
+        .options(selectinload(LoginRecord.user))
+        .order_by(LoginRecord.created_at.desc())
+        .limit(limit)
+    )
+    rows = []
+    for item in db.scalars(query).all():
+        rows.append({
+            'id': item.id,
+            'userId': item.user_id,
+            'mobile': item.user.mobile if item.user else '',
+            'name': item.user.name if item.user else '未绑定用户',
+            'role': item.user.role if item.user else 'user',
+            'loginMethod': item.login_method,
+            'ipAddress': item.ip_address,
+            'userAgent': item.user_agent,
             'createdAt': format_datetime(item.created_at),
         })
     return rows

@@ -47,6 +47,32 @@ class User(Base):
     jobs: Mapped[list['Job']] = relationship(back_populates='owner')
     notifications: Mapped[list['Notification']] = relationship(back_populates='user')
     service_requests: Mapped[list['ServiceRequest']] = relationship(back_populates='owner')
+    login_records: Mapped[list['LoginRecord']] = relationship(back_populates='user')
+    admin_account: Mapped['AdminAccount | None'] = relationship(back_populates='user')
+
+
+class AdminAccount(Base):
+    __tablename__ = 'admins'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), unique=True, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    user: Mapped[User] = relationship(back_populates='admin_account')
+
+
+class LoginRecord(Base):
+    __tablename__ = 'login_records'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'), index=True)
+    login_method: Mapped[str] = mapped_column(String(32), default='password')
+    ip_address: Mapped[str] = mapped_column(String(64), default='')
+    user_agent: Mapped[str] = mapped_column(Text, default='')
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+
+    user: Mapped[User] = relationship(back_populates='login_records')
 
 
 class Notification(Base):

@@ -1,5 +1,6 @@
 import type {
   AdminNotificationRow,
+  AdminLoginRecordRow,
   AdminOverview,
   AdminReportRow,
   AdminServiceRequestRow,
@@ -151,6 +152,10 @@ export function getAdminServiceRequests() {
 
 export function getAdminNotifications() {
   return request<AdminNotificationRow[]>('/api/admin/notifications')
+}
+
+export function getAdminLoginRecords() {
+  return request<AdminLoginRecordRow[]>('/api/admin/login-records')
 }
 
 export function updateAdminJobReview(jobId: string, reviewStatus: 'approved' | 'rejected', reviewNote = '') {

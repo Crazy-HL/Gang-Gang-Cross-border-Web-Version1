@@ -118,6 +118,7 @@ class DetectionJob(BaseModel):
     riskScore: int | None
     createdAt: str
     ownerName: str
+    ownerMobile: str = ''
     reviewStatus: str = 'none'
     reviewNote: str = ''
 

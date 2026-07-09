@@ -34,6 +34,11 @@ def read_admin_notifications(db: DbSession, user: User = Depends(get_current_use
     return admin_service.get_admin_notifications(db, user)
 
 
+@router.get('/login-records')
+def read_admin_login_records(db: DbSession, user: User = Depends(get_current_user)):
+    return admin_service.get_admin_login_records(db, user)
+
+
 @router.get('/jobs')
 def read_admin_jobs(db: DbSession, user: User = Depends(get_current_user)):
     return admin_service.get_admin_jobs(db, user)
