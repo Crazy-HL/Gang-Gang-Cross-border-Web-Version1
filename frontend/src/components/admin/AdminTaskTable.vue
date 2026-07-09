@@ -7,7 +7,7 @@
           <input
             v-model.trim="keyword"
             class="mt-2 w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 outline-none transition focus:border-slate-900"
-            placeholder="输入任务标题、任务ID或用户姓名"
+            placeholder="输入任务标题、任务ID、用户姓名或手机号"
           >
         </label>
       </div>
@@ -36,7 +36,7 @@
                 <div class="font-medium text-slate-950">{{ job.title }}</div>
                 <div class="mt-1 text-xs text-slate-500">任务 {{ job.id }}</div>
               </td>
-              <td class="px-4 py-3 text-slate-600">{{ job.ownerName }}</td>
+              <td class="px-4 py-3 text-slate-600">{{ job.ownerName }} / {{ job.ownerMobile || '-' }}</td>
               <td class="px-4 py-3 text-slate-600">{{ job.market }} / {{ job.category }}</td>
               <td class="px-4 py-3">
                 <span
@@ -69,7 +69,7 @@
           <div class="grid gap-1">
             <dt class="text-xs font-medium uppercase tracking-wide text-slate-500">任务信息</dt>
             <dd>任务ID：{{ selectedJob.id }}</dd>
-            <dd>用户：{{ selectedJob.ownerName }}</dd>
+            <dd>用户：{{ selectedJob.ownerName }} / {{ selectedJob.ownerMobile || '-' }}</dd>
             <dd>品牌：{{ selectedJob.brand }}</dd>
             <dd>市场：{{ selectedJob.market }}</dd>
           </div>
@@ -151,7 +151,7 @@ const submitting = ref(false)
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const reviewLabels: Record<ReviewStatus, string> = { none: '未申请', pending: '待人工复核', approved: '已通过复核', rejected: '已驳回复核' }
 const selectedJob = computed(() => localJobs.value.find((job) => job.id === selectedId.value) ?? localJobs.value[0])
-const filteredJobs = computed(() => localJobs.value.filter((job) => `${job.ownerName} ${job.title} ${job.id}`.toLowerCase().includes(keyword.value.toLowerCase())))
+const filteredJobs = computed(() => localJobs.value.filter((job) => `${job.ownerName} ${job.ownerMobile} ${job.title} ${job.id}`.toLowerCase().includes(keyword.value.toLowerCase())))
 function assetUrl(path: string) { return path.startsWith('http') ? path : `${API_BASE_URL}${path}` }
 function riskBadgeStyle(level: RiskLevel) {
   const meta = getRiskMeta(level)

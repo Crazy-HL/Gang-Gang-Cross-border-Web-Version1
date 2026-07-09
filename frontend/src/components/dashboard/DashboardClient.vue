@@ -6,9 +6,9 @@
         <h1 class="mt-2 text-3xl font-black text-slate-950">用户中心</h1>
       </div>
       <div class="flex flex-wrap gap-3">
-        <button type="button" @click="tab = 'tasks'" :class="tab === 'tasks' ? activeClass : inactiveClass">我的任务</button>
-        <button type="button" @click="tab = 'serviceRequests'" :class="tab === 'serviceRequests' ? activeClass : inactiveClass">服务工单</button>
-        <button type="button" @click="tab = 'reports'" :class="tab === 'reports' ? activeClass : inactiveClass">我的报告</button>
+        <button type="button" @click="setTab('tasks')" :class="tab === 'tasks' ? activeClass : inactiveClass">我的任务</button>
+        <button type="button" @click="setTab('serviceRequests')" :class="tab === 'serviceRequests' ? activeClass : inactiveClass">服务工单</button>
+        <button type="button" @click="setTab('reports')" :class="tab === 'reports' ? activeClass : inactiveClass">我的报告</button>
       </div>
     </div>
 
@@ -20,7 +20,7 @@
 
 <script setup lang="ts">
 import { ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import TaskTable from '@/components/dashboard/TaskTable.vue'
 import ReportList from '@/components/dashboard/ReportList.vue'
 import ServiceRequestTable from '@/components/dashboard/ServiceRequestTable.vue'
@@ -29,13 +29,26 @@ import type { DetectionJob, DetectionReport, ServiceRequestItem } from '@/types/
 defineProps<{ jobs: DetectionJob[]; reports: DetectionReport[]; serviceRequests: ServiceRequestItem[] }>()
 
 const route = useRoute()
-const tab = ref<'tasks' | 'serviceRequests' | 'reports'>(route.query.tab === 'reports' ? 'reports' : route.query.tab === 'serviceRequests' ? 'serviceRequests' : 'tasks')
+const router = useRouter()
+type DashboardTab = 'tasks' | 'serviceRequests' | 'reports'
+const tab = ref<DashboardTab>(tabFromQuery(route.query.tab))
 const activeClass = 'rounded-full px-5 py-2 text-sm font-bold bg-gold text-white'
 const inactiveClass = 'rounded-full px-5 py-2 text-sm font-bold border border-slate-200 text-slate-950'
 
+function tabFromQuery(value: unknown): DashboardTab {
+  const rawValue = Array.isArray(value) ? value[0] : value
+  if (rawValue === 'reports') return 'reports'
+  if (rawValue === 'serviceRequests') return 'serviceRequests'
+  return 'tasks'
+}
+
+function setTab(nextTab: DashboardTab) {
+  tab.value = nextTab
+  const query = nextTab === 'tasks' ? {} : { tab: nextTab }
+  void router.push({ path: '/dashboard', query })
+}
+
 watch(() => route.query.tab, (value) => {
-  if (value === 'reports') tab.value = 'reports'
-  else if (value === 'serviceRequests') tab.value = 'serviceRequests'
-  else if (value === 'tasks') tab.value = 'tasks'
+  tab.value = tabFromQuery(value)
 })
 </script>

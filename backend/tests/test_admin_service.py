@@ -4,8 +4,8 @@ import unittest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
-from app.db.base import Base, Job, Notification, Report, ServiceRequest, User
-from app.services import admin_service, report_service
+from app.db.base import AdminAccount, Base, Job, Notification, Report, ServiceRequest, User
+from app.services import admin_service, auth_service, report_service
 
 
 class AdminServiceTests(unittest.TestCase):
@@ -105,6 +105,27 @@ class AdminServiceTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.status_code, 403)
 
+    def test_active_admin_table_record_grants_admin_access(self):
+        self.normal.role = 'user'
+        self.db.add(AdminAccount(user_id=self.normal.id, enabled=True))
+        self.db.commit()
+
+        overview = admin_service.get_admin_overview(self.db, self.normal)
+        users = admin_service.get_admin_users(self.db, self.normal)
+        user_row = next(row for row in users if row['id'] == self.normal.id)
+
+        self.assertEqual(overview['totalUsers'], 2)
+        self.assertEqual(user_row['role'], 'admin')
+
+    def test_active_admin_table_record_returns_admin_role_to_frontend(self):
+        self.normal.role = 'user'
+        self.db.add(AdminAccount(user_id=self.normal.id, enabled=True))
+        self.db.commit()
+
+        payload = auth_service.get_me(self.normal, self.db)
+
+        self.assertEqual(payload['role'], 'admin')
+
     def test_admin_overview_counts_core_tables(self):
         overview = admin_service.get_admin_overview(self.db, self.admin)
 
@@ -145,6 +166,10 @@ class AdminServiceTests(unittest.TestCase):
         appeal_request_row = next(row for row in service_requests if row['id'] == 'APL-ADMIN-1')
 
         self.assertEqual(admin_row['role'], 'admin')
+        normal_row = next(row for row in users if row['mobile'] == '13800138000')
+        self.assertEqual(normal_row['reportCount'], 1)
+        self.assertEqual(normal_row['loginCount'], 0)
+        self.assertEqual(normal_row['lastLoginAt'], '')
         self.assertEqual(ip_row['ownerName'], '普通用户')
         self.assertEqual(ip_row['reportType'], 'ip_detection')
         self.assertEqual(ip_row['typeLabel'], '侵权检测')
@@ -163,6 +188,27 @@ class AdminServiceTests(unittest.TestCase):
         self.assertEqual(appeal_request_row['typeLabel'], '平台申诉')
         self.assertEqual(appeal_request_row['ownerMobile'], '13800138000')
         self.assertEqual(notifications[0]['ownerName'], '普通用户')
+
+    def test_login_with_password_records_successful_login(self):
+        self.normal.password_hash = auth_service.hash_password('secret123')
+        self.db.commit()
+
+        auth_service.login_with_password(self.db, self.normal.mobile, 'secret123', '127.0.0.1', 'UnitTest/1.0')
+        records = admin_service.get_admin_login_records(self.db, self.admin)
+
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]['mobile'], '13800138000')
+        self.assertEqual(records[0]['name'], '普通用户')
+        self.assertEqual(records[0]['loginMethod'], 'password')
+        self.assertEqual(records[0]['ipAddress'], '127.0.0.1')
+        self.assertEqual(records[0]['userAgent'], 'UnitTest/1.0')
+        self.assertTrue(records[0]['createdAt'])
+
+    def test_normal_user_cannot_read_admin_login_records(self):
+        with self.assertRaises(Exception) as ctx:
+            admin_service.get_admin_login_records(self.db, self.normal)
+
+        self.assertEqual(ctx.exception.status_code, 403)
 
 
 if __name__ == '__main__':

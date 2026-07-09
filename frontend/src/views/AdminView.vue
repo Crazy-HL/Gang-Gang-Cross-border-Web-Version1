@@ -59,6 +59,7 @@
         :reports="reports"
         :service-requests="serviceRequests"
         :notifications="notifications"
+        :login-records="loginRecords"
       />
     </div>
   </main>
@@ -73,6 +74,7 @@ import AdminDashboard from '@/components/admin/AdminDashboard.vue'
 import {
   ApiError,
   getAdminJobs,
+  getAdminLoginRecords,
   getAdminNotifications,
   getAdminOverview,
   getAdminReports,
@@ -81,6 +83,7 @@ import {
 } from '@/api/client'
 import type {
   AdminNotificationRow,
+  AdminLoginRecordRow,
   AdminOverview,
   AdminReportRow,
   AdminServiceRequestRow,
@@ -94,6 +97,7 @@ const users = ref<AdminUserRow[]>([])
 const reports = ref<AdminReportRow[]>([])
 const serviceRequests = ref<AdminServiceRequestRow[]>([])
 const notifications = ref<AdminNotificationRow[]>([])
+const loginRecords = ref<AdminLoginRecordRow[]>([])
 const loading = ref(true)
 const error = ref('')
 const warning = ref('')
@@ -106,6 +110,7 @@ function resetAdminData() {
   reports.value = []
   serviceRequests.value = []
   notifications.value = []
+  loginRecords.value = []
 }
 
 function isForbiddenReason(reason: unknown) {
@@ -118,7 +123,7 @@ async function loadAdminConsole() {
   warning.value = ''
   forbidden.value = false
   try {
-    const [overviewResult, jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult] =
+    const [overviewResult, jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult, loginRecordsResult] =
       await Promise.allSettled([
         getAdminOverview(),
         getAdminJobs(),
@@ -126,9 +131,10 @@ async function loadAdminConsole() {
         getAdminReports(),
         getAdminServiceRequests(),
         getAdminNotifications(),
+        getAdminLoginRecords(),
       ])
 
-    const results = [overviewResult, jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult]
+    const results = [overviewResult, jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult, loginRecordsResult]
     if (results.some((result) => result.status === 'rejected' && isForbiddenReason(result.reason))) {
       resetAdminData()
       forbidden.value = true
@@ -148,8 +154,9 @@ async function loadAdminConsole() {
     reports.value = reportsResult.status === 'fulfilled' ? reportsResult.value : []
     serviceRequests.value = serviceRequestsResult.status === 'fulfilled' ? serviceRequestsResult.value : []
     notifications.value = notificationsResult.status === 'fulfilled' ? notificationsResult.value : []
+    loginRecords.value = loginRecordsResult.status === 'fulfilled' ? loginRecordsResult.value : []
 
-    if ([jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult].some((result) => result.status === 'rejected')) {
+    if ([jobsResult, usersResult, reportsResult, serviceRequestsResult, notificationsResult, loginRecordsResult].some((result) => result.status === 'rejected')) {
       warning.value = '部分后台数据加载失败，已展示可用内容。'
     }
   } catch {

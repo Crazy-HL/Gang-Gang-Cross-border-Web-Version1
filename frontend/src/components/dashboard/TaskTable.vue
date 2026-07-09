@@ -1,13 +1,115 @@
-﻿<template><section class="rounded-[2rem] border border-slate-200/80 bg-panel/75 p-5"><div class="grid gap-4 md:grid-cols-[1fr_220px]"><label class="text-sm font-semibold text-slate-950">搜索任务<input v-model="keyword" aria-label="搜索任务" class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900" placeholder="输入任务ID、品牌或标题" /></label><label class="text-sm font-semibold text-slate-950">状态筛选<select v-model="status" class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900"><option value="all">全部</option><option value="queued">待检测</option><option value="processing">进行中</option><option value="done">完成</option><option value="failed">失败</option></select></label></div><div class="mt-6 overflow-x-auto"><table class="w-full min-w-[760px] text-left text-sm" aria-label="我的检测任务"><thead class="text-slate-500"><tr class="border-b border-slate-200/80"><th class="py-3">任务ID</th><th>标题</th><th>提交时间</th><th>状态</th><th>风险</th><th>操作</th></tr></thead><tbody><tr v-for="job in filteredJobs" :key="job.id" class="border-b border-white/5 text-slate-600 hover:bg-white/[0.03]"><td class="py-4 font-semibold text-slate-700">{{ job.id }}</td><td>{{ job.title }}</td><td>{{ job.createdAt }}</td><td><span class="rounded-full px-3 py-1 text-xs font-bold" :class="statusClass(job.status)">{{ statusLabels[job.status] }}</span></td><td><span class="rounded-full px-2.5 py-1 text-xs font-bold" :style="{ color: getRiskMeta(job.riskLevel).color, background: getRiskMeta(job.riskLevel).backgroundColor }">{{ getRiskMeta(job.riskLevel).label }}</span></td><td><RouterLink :to="`/results/${job.id}`" class="font-semibold text-slate-700 hover:text-slate-950">查看报告</RouterLink></td></tr></tbody></table><p v-if="filteredJobs.length === 0" class="py-10 text-center text-slate-500">暂无匹配任务</p></div></section></template>
+<template>
+  <section class="rounded-[2rem] border border-slate-200/80 bg-panel/75 p-5">
+    <div class="grid gap-4 md:grid-cols-[1fr_220px]">
+      <label class="text-sm font-semibold text-slate-950">
+        搜索任务
+        <input
+          v-model="keyword"
+          aria-label="搜索任务"
+          class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900"
+          placeholder="输入任务ID、品牌、标题或手机号"
+        />
+      </label>
+      <label class="text-sm font-semibold text-slate-950">
+        状态筛选
+        <select
+          v-model="status"
+          class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900"
+        >
+          <option value="all">全部</option>
+          <option value="queued">待检测</option>
+          <option value="processing">进行中</option>
+          <option value="done">完成</option>
+          <option value="failed">失败</option>
+        </select>
+      </label>
+    </div>
+
+    <div class="mt-6 overflow-x-auto">
+      <table class="w-full min-w-[900px] text-left text-sm" aria-label="我的检测任务">
+        <thead class="text-slate-500">
+          <tr class="border-b border-slate-200/80">
+            <th class="py-3">任务ID</th>
+            <th>标题</th>
+            <th>用户手机号</th>
+            <th>提交时间</th>
+            <th>状态</th>
+            <th>风险</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr
+            v-for="job in filteredJobs"
+            :key="job.id"
+            class="border-b border-white/5 text-slate-600 hover:bg-white/[0.03]"
+          >
+            <td class="py-4 font-semibold text-slate-700">{{ job.id }}</td>
+            <td>{{ job.title }}</td>
+            <td>{{ job.ownerMobile || '-' }}</td>
+            <td>{{ job.createdAt }}</td>
+            <td>
+              <span class="rounded-full px-3 py-1 text-xs font-bold" :class="statusClass(job.status)">
+                {{ statusLabels[job.status] }}
+              </span>
+            </td>
+            <td>
+              <span
+                class="rounded-full px-2.5 py-1 text-xs font-bold"
+                :style="{
+                  color: getRiskMeta(job.riskLevel).color,
+                  background: getRiskMeta(job.riskLevel).backgroundColor,
+                }"
+              >
+                {{ getRiskMeta(job.riskLevel).label }}
+              </span>
+            </td>
+            <td>
+              <RouterLink
+                :to="`/results/${job.id}`"
+                class="font-semibold text-slate-700 hover:text-slate-950"
+              >
+                查看报告
+              </RouterLink>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+      <p v-if="filteredJobs.length === 0" class="py-10 text-center text-slate-500">暂无匹配任务</p>
+    </div>
+  </section>
+</template>
+
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { getRiskMeta } from '@/utils/risk'
 import type { DetectionJob, JobStatus } from '@/types/domain'
+
 const props = defineProps<{ jobs: DetectionJob[] }>()
 const keyword = ref('')
 const status = ref<JobStatus | 'all'>('all')
-const statusLabels: Record<JobStatus, string> = { queued: '待检测', processing: '进行中', done: '完成', failed: '失败' }
-const statusClasses: Record<JobStatus, string> = { queued: 'bg-white/80 text-slate-600 border border-slate-200/80', processing: 'bg-gold/45 text-slate-700 border border-gold/60', done: 'bg-white/80 text-slate-600 border border-slate-200/80', failed: 'bg-white/80 text-slate-600 border border-slate-200/80' }
-const filteredJobs = computed(() => props.jobs.filter((job) => `${job.id} ${job.title} ${job.brand}`.toLowerCase().includes(keyword.value.trim().toLowerCase()) && (status.value === 'all' || job.status === status.value)))
-function statusClass(value: JobStatus) { return statusClasses[value] }
+const statusLabels: Record<JobStatus, string> = {
+  queued: '待检测',
+  processing: '进行中',
+  done: '完成',
+  failed: '失败',
+}
+const statusClasses: Record<JobStatus, string> = {
+  queued: 'bg-white/80 text-slate-600 border border-slate-200/80',
+  processing: 'bg-gold/45 text-slate-700 border border-gold/60',
+  done: 'bg-white/80 text-slate-600 border border-slate-200/80',
+  failed: 'bg-white/80 text-slate-600 border border-slate-200/80',
+}
+const filteredJobs = computed(() =>
+  props.jobs.filter((job) =>
+    `${job.id} ${job.title} ${job.brand} ${job.ownerMobile}`
+      .toLowerCase()
+      .includes(keyword.value.trim().toLowerCase()) &&
+    (status.value === 'all' || job.status === status.value),
+  ),
+)
+
+function statusClass(value: JobStatus) {
+  return statusClasses[value]
+}
 </script>

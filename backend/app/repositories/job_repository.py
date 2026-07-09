@@ -19,6 +19,7 @@ def job_to_dict(job: Job):
         'riskScore': job.risk_score,
         'createdAt': format_datetime(job.created_at),
         'ownerName': job.owner.name if job.owner else '张三',
+        'ownerMobile': job.owner.mobile if job.owner else '',
         'reviewStatus': job.review_status,
         'reviewNote': job.review_note,
         'fileUrl': job.files[0].file_url if job.files else '',
