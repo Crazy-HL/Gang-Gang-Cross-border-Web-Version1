@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import random
+import re
 from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.orm import Session
@@ -15,13 +16,31 @@ from app.repositories.verification_code_repository import create_verification_co
 from app.services.sms_service import send_verification_sms
 
 settings = get_settings()
+ADMIN_PASSWORD_LOGIN_ACCOUNT = 'admin'
+PHONE_NUMBER_PATTERN = re.compile(r'1\d{10}')
 
 
 def _generate_code() -> str:
     return f'{random.randint(0, 999999):06d}'
 
 
+def _normalize_account(account: str) -> str:
+    return account.strip()
+
+
+def _is_phone_number(account: str) -> bool:
+    return bool(PHONE_NUMBER_PATTERN.fullmatch(_normalize_account(account)))
+
+
+def _can_use_password_login(account: str) -> bool:
+    normalized = _normalize_account(account)
+    return _is_phone_number(normalized) or normalized == ADMIN_PASSWORD_LOGIN_ACCOUNT
+
+
 def send_code(db: Session, mobile: str):
+    mobile = _normalize_account(mobile)
+    if not _is_phone_number(mobile):
+        return {'ok': False, 'debugCode': None}
     code = _generate_code()
     expires_at = datetime.now(timezone.utc) + timedelta(seconds=settings.verification_code_ttl_seconds)
     create_verification_code(db, mobile, code, expires_at)
@@ -31,6 +50,9 @@ def send_code(db: Session, mobile: str):
 
 
 def _validate_code(db: Session, mobile: str, code: str) -> bool:
+    mobile = _normalize_account(mobile)
+    if not _is_phone_number(mobile):
+        return False
     stored = get_latest_valid_code(db, mobile)
     if not stored or stored.code != code:
         return False
@@ -43,6 +65,9 @@ def _record_login(db: Session, user: User, login_method: str, ip_address: str = 
 
 
 def login_with_password(db: Session, mobile: str, password: str, ip_address: str = '', user_agent: str = ''):
+    mobile = _normalize_account(mobile)
+    if not _can_use_password_login(mobile):
+        return {'ok': False, 'token': '', 'user': None}
     user = get_user_by_mobile(db, mobile)
     if not user or not verify_password(password, user.password_hash):
         return {'ok': False, 'token': '', 'user': None}
@@ -52,6 +77,7 @@ def login_with_password(db: Session, mobile: str, password: str, ip_address: str
 
 
 def login_with_code(db: Session, mobile: str, code: str, ip_address: str = '', user_agent: str = ''):
+    mobile = _normalize_account(mobile)
     if not _validate_code(db, mobile, code):
         return {'ok': False, 'token': '', 'user': None}
     user = get_user_by_mobile(db, mobile)
@@ -63,6 +89,9 @@ def login_with_code(db: Session, mobile: str, code: str, ip_address: str = '', u
 
 
 def register_with_code(db: Session, mobile: str, code: str, password: str, ip_address: str = '', user_agent: str = ''):
+    mobile = _normalize_account(mobile)
+    if not _is_phone_number(mobile):
+        return {'ok': False, 'userId': None, 'token': '', 'user': None}
     if not _validate_code(db, mobile, code):
         return {'ok': False, 'userId': None, 'token': '', 'user': None}
     user = get_user_by_mobile(db, mobile)
