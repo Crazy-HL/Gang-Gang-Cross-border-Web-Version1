@@ -11,13 +11,25 @@
     </div>
 
     <label class="block text-sm font-semibold text-slate-950">
-      手机号
-      <input v-model="mobile" aria-label="手机号" class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900" placeholder="13800000000" />
+      {{ accountLabel }}
+      <input v-model.trim="mobile" :aria-label="accountLabel" class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900" :placeholder="accountPlaceholder" />
     </label>
 
-    <label v-if="mode === 'login' && loginMethod === 'password' || mode === 'register'" class="mt-5 block text-sm font-semibold text-slate-950">
+    <label v-if="(mode === 'login' && loginMethod === 'password') || mode === 'register'" class="mt-5 block text-sm font-semibold text-slate-950">
       密码
-      <input v-model="password" type="password" aria-label="密码" class="mt-2 w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 text-slate-900" placeholder="至少 6 位密码" />
+      <span class="relative mt-2 block">
+        <input v-model="password" :type="showPassword ? 'text' : 'password'" aria-label="密码" class="auth-password-input w-full rounded-2xl border border-slate-200/80 bg-ink-2 px-4 py-3 pr-12 text-slate-900" placeholder="至少 6 位密码" />
+        <button
+          type="button"
+          class="absolute inset-y-0 right-3 grid place-items-center rounded-full px-2 text-slate-500 transition hover:text-slate-950"
+          :aria-label="showPassword ? '隐藏密码' : '显示密码'"
+          :title="showPassword ? '隐藏密码' : '显示密码'"
+          @click="showPassword = !showPassword"
+        >
+          <EyeOff v-if="showPassword" class="h-5 w-5" aria-hidden="true" />
+          <Eye v-else class="h-5 w-5" aria-hidden="true" />
+        </button>
+      </span>
     </label>
 
     <div v-if="mode === 'register' || loginMethod === 'code'" class="mt-5 grid grid-cols-[1fr_auto] gap-3">
@@ -36,10 +48,13 @@
 </template>
 
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
+import { Eye, EyeOff } from 'lucide-vue-next'
 import { useRouter } from 'vue-router'
 import { loginWithCode, loginWithPassword, registerWithCode, sendCode } from '@/api/client'
 import { saveAuth } from '@/stores/auth'
+import { getAccountLabel, getAccountPlaceholder } from './authFormCopy'
+import { canUseCodeAccount, canUsePasswordLoginAccount, canUseRegisterAccount, normalizeAccount } from './credentialRules'
 
 const router = useRouter()
 const mode = ref<'login' | 'register'>('login')
@@ -52,17 +67,33 @@ const error = ref('')
 const debugCode = ref('')
 const sending = ref(false)
 const submitting = ref(false)
+const showPassword = ref(false)
 let timer: number | undefined
 const activeTab = 'flex-1 rounded-full px-4 py-2 text-sm font-bold bg-gold text-white'
 const inactiveTab = 'flex-1 rounded-full px-4 py-2 text-sm font-bold text-slate-600'
 const activeSmallTab = 'flex-1 rounded-full px-3 py-1.5 text-xs font-bold bg-white/15 text-slate-950'
 const inactiveSmallTab = 'flex-1 rounded-full px-3 py-1.5 text-xs font-bold text-slate-500'
+const accountLabel = computed(() => getAccountLabel(mode.value, loginMethod.value))
+const accountPlaceholder = computed(() => getAccountPlaceholder(mode.value, loginMethod.value))
+
+watch([mode, loginMethod], () => {
+  showPassword.value = false
+})
 
 function tick() { window.clearTimeout(timer); if (countdown.value <= 0) return; timer = window.setTimeout(() => { countdown.value -= 1; tick() }, 1000) }
 onUnmounted(() => window.clearTimeout(timer))
 
 function validateBase() {
-  if (!/^1\d{10}$/.test(mobile.value)) {
+  const account = normalizeAccount(mobile.value)
+  if (mode.value === 'register' && !canUseRegisterAccount(account)) {
+    error.value = '请输入有效手机号'
+    return false
+  }
+  if (mode.value === 'login' && loginMethod.value === 'password' && !canUsePasswordLoginAccount(account)) {
+    error.value = '请输入有效手机号或管理员账号'
+    return false
+  }
+  if (mode.value === 'login' && loginMethod.value === 'code' && !canUseCodeAccount(account)) {
     error.value = '请输入有效手机号'
     return false
   }
@@ -78,14 +109,15 @@ function validateBase() {
 }
 
 async function handleSendCode() {
-  if (!/^1\d{10}$/.test(mobile.value)) { error.value = '请输入有效手机号'; return }
+  const account = normalizeAccount(mobile.value)
+  if (!canUseCodeAccount(account)) { error.value = '请输入有效手机号'; return }
   error.value = ''
   debugCode.value = ''
   countdown.value = 60
   sending.value = true
   tick()
   try {
-    const result = await sendCode(mobile.value)
+    const result = await sendCode(account)
     if (!result.ok) { countdown.value = 0; error.value = '验证码发送失败，请重试'; return }
     debugCode.value = result.debugCode ?? ''
   } catch {
@@ -99,13 +131,14 @@ async function handleSendCode() {
 async function handleSubmit() {
   error.value = ''
   if (!validateBase()) return
+  const account = normalizeAccount(mobile.value)
   submitting.value = true
   try {
     const result = mode.value === 'register'
-      ? await registerWithCode(mobile.value, code.value, password.value)
+      ? await registerWithCode(account, code.value, password.value)
       : loginMethod.value === 'password'
-        ? await loginWithPassword(mobile.value, password.value)
-        : await loginWithCode(mobile.value, code.value)
+        ? await loginWithPassword(account, password.value)
+        : await loginWithCode(account, code.value)
     if (result.ok && result.user) {
       saveAuth(result.token, result.user)
       router.push((router.currentRoute.value.query.redirect as string) || '/dashboard')
@@ -119,3 +152,12 @@ async function handleSubmit() {
   }
 }
 </script>
+
+<style scoped>
+.auth-password-input::-ms-reveal,
+.auth-password-input::-ms-clear {
+  display: none;
+  height: 0;
+  width: 0;
+}
+</style>

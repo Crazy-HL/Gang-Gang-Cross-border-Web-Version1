@@ -17,8 +17,8 @@ import type {
   ServiceRequestInput,
   ServiceRequestItem,
 } from '@/types/domain'
+import { API_BASE_URL } from './apiBaseUrl'
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 let authToken = ''
 
 export class ApiError extends Error {

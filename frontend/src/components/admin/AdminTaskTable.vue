@@ -136,6 +136,7 @@
 
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { API_BASE_URL } from '@/api/apiBaseUrl'
 import { updateAdminJobReview } from '@/api/client'
 import { getRiskMeta } from '@/utils/risk'
 import type { DetectionJob, ReviewStatus, RiskLevel } from '@/types/domain'
@@ -148,7 +149,6 @@ const selectedId = ref(props.jobs[0]?.id ?? '')
 const adminNote = ref('')
 const message = ref('')
 const submitting = ref(false)
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000'
 const reviewLabels: Record<ReviewStatus, string> = { none: '未申请', pending: '待人工复核', approved: '已通过复核', rejected: '已驳回复核' }
 const selectedJob = computed(() => localJobs.value.find((job) => job.id === selectedId.value) ?? localJobs.value[0])
 const filteredJobs = computed(() => localJobs.value.filter((job) => `${job.ownerName} ${job.ownerMobile} ${job.title} ${job.id}`.toLowerCase().includes(keyword.value.toLowerCase())))
