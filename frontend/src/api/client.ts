@@ -21,6 +21,9 @@ import { API_BASE_URL } from './apiBaseUrl'
 
 let authToken = ''
 
+type AuthLoginResult = { ok: boolean; token: string; user: AuthUser | null; needsPasswordSetup?: boolean; reason?: string }
+type AuthRegisterResult = { ok: boolean; userId: number | null; token: string; user: AuthUser | null; reason?: string }
+
 export class ApiError extends Error {
   status: number
 
@@ -65,15 +68,28 @@ export function sendCode(mobile: string) {
 }
 
 export function loginWithPassword(mobile: string, password: string) {
-  return request<{ ok: boolean; token: string; user: AuthUser | null }>('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, password }) })
+  return request<AuthLoginResult>('/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, password }) })
 }
 
 export function loginWithCode(mobile: string, code: string) {
-  return request<{ ok: boolean; token: string; user: AuthUser | null }>('/api/auth/login/code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, code }) })
+  return request<AuthLoginResult>('/api/auth/login/code', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, code }) })
 }
 
 export function registerWithCode(mobile: string, code: string, password: string) {
-  return request<{ ok: boolean; userId: number | null; token: string; user: AuthUser | null }>('/api/auth/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, code, password }) })
+  return request<AuthRegisterResult>('/api/auth/register', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ mobile, code, password }) })
+}
+
+export function getWechatWebLoginUrl(redirectUri: string, state: string) {
+  const query = new URLSearchParams({ redirectUri, state })
+  return request<{ ok: boolean; url: string; reason?: string }>(`/api/auth/wechat/web/login-url?${query.toString()}`)
+}
+
+export function loginWithWechatWebCode(code: string) {
+  return request<AuthLoginResult>('/api/auth/wechat/web-login', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ code }) })
+}
+
+export function setPassword(password: string) {
+  return request<{ ok: boolean; user: AuthUser | null; reason?: string }>('/api/auth/password', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ password }) })
 }
 
 export function getMe() {

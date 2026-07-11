@@ -250,9 +250,33 @@ class CodeLoginRequest(BaseModel):
     code: str
 
 
+class WechatPhoneLoginRequest(BaseModel):
+    phoneCode: str
+    loginCode: str = ''
+
+
+class WechatWebLoginRequest(BaseModel):
+    code: str
+
+
+class WechatWebLoginUrlResponse(BaseModel):
+    ok: bool
+    url: str = ''
+    reason: str = ''
+
+
+class ProfileUpdateRequest(BaseModel):
+    name: str = ''
+    avatarUrl: str = ''
+
+
 class RegisterRequest(BaseModel):
     mobile: str
     code: str
+    password: str
+
+
+class SetPasswordRequest(BaseModel):
     password: str
 
 
@@ -265,6 +289,7 @@ class AuthUser(BaseModel):
     id: int
     mobile: str
     name: str
+    avatarUrl: str = ''
     role: UserRole
 
 
@@ -272,6 +297,8 @@ class AuthLoginResponse(BaseModel):
     ok: bool
     token: str
     user: AuthUser | None
+    needsPasswordSetup: bool = False
+    reason: str = ''
 
 
 class AuthRegisterResponse(BaseModel):
@@ -279,13 +306,32 @@ class AuthRegisterResponse(BaseModel):
     userId: int | None = None
     token: str = ''
     user: AuthUser | None = None
+    reason: str = ''
+
+
+class AuthPasswordResponse(BaseModel):
+    ok: bool
+    user: AuthUser | None = None
+    reason: str = ''
 
 
 class AuthMeResponse(BaseModel):
     id: int
     mobile: str
     name: str
+    avatarUrl: str = ''
     role: UserRole
+
+
+class AuthProfileResponse(BaseModel):
+    ok: bool
+    user: AuthUser
+
+
+class AvatarUploadResponse(BaseModel):
+    ok: bool
+    avatarUrl: str
+    user: AuthUser
 
 
 class LogoutResponse(BaseModel):

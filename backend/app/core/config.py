@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     sms_endpoint: str = 'dysmsapi.aliyuncs.com'
     alibaba_cloud_access_key_id: str = Field(default='', validation_alias='ALIBABA_CLOUD_ACCESS_KEY_ID')
     alibaba_cloud_access_key_secret: str = Field(default='', validation_alias='ALIBABA_CLOUD_ACCESS_KEY_SECRET')
+    wechat_mini_appid: str = ''
+    wechat_mini_secret: str = ''
+    wechat_web_appid: str = ''
+    wechat_web_secret: str = ''
+    wechat_api_timeout_seconds: float = 8
     uspto_lookup_enabled: bool = True
     uspto_timeout_seconds: float = 20
     uspto_cache_ttl_seconds: int = 24 * 60 * 60
